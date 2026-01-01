@@ -70,7 +70,7 @@ export const ProfileView: React.FC = () => {
         <div className="relative">
           <Avatar 
             src={userProfile?.photoURL} 
-            name={userProfile?.displayName} 
+            name={userProfile?.displayName || 'User'} 
             size="xl"
           />
           <button className="absolute bottom-0 right-0 p-1.5 bg-primary rounded-full text-white hover:bg-primary/80 shadow-lg">
@@ -131,7 +131,7 @@ export const ProfileView: React.FC = () => {
                 <label className="text-sm text-[#c9ad92]">Member Since</label>
                 <input 
                   type="text" 
-                  value={userProfile?.createdAt ? new Date(userProfile.createdAt.toDate?.() || userProfile.createdAt).toLocaleDateString() : 'N/A'}
+                  value={userProfile?.createdAt ? new Date(userProfile.createdAt).toLocaleDateString() : 'N/A'}
                   disabled
                   className="w-full glass-input rounded-lg px-4 py-3 text-sm opacity-60"
                 />

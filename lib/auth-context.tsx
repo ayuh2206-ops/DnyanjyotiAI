@@ -10,7 +10,8 @@ import {
   createUserWithEmailAndPassword
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp, updateDoc, increment } from 'firebase/firestore';
-import { auth, db, googleProvider, isAdmin } from './firebase';
+import { auth, db, googleProvider, VERO_EMAIL } from './firebase';
+import { UserRole, PaymentStatus, PlanType } from './db';
 
 // User profile stored in Firestore
 export interface UserProfile {
@@ -18,15 +19,22 @@ export interface UserProfile {
   email: string;
   displayName: string;
   photoURL: string | null;
-  plan: 'Free' | 'Premium';
+  role: UserRole;
+  plan: PlanType;
   tokens: number;
   streak: number;
   longestStreak: number;
   efficiency: number;
   targetExam: string;
-  createdAt: Date;
-  lastLoginAt: Date;
   isAdmin: boolean;
+  // Payment
+  paymentStatus: PaymentStatus;
+  paymentExpiry?: Date | null;
+  lifetimeAccess: boolean;
+  // Batch assignment
+  batchId?: string | null;
+  batchName?: string | null;
+  facultyId?: string | null;
   // Stats
   testsCompleted: number;
   totalStudyTime: number;
@@ -42,12 +50,17 @@ export interface UserProfile {
     currentAffairs: number;
     ethics: number;
   };
+  createdAt: Date;
+  lastLoginAt: Date;
 }
 
 interface AuthContextType {
   user: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
+  isVero: boolean;
+  isFaculty: boolean;
+  isStudent: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name: string) => Promise<void>;
@@ -62,38 +75,59 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Check if user is VERO admin
+const isVeroAdmin = (email: string | null | undefined): boolean => {
+  return email === VERO_EMAIL;
+};
+
 // Default profile for new users
-const createDefaultProfile = (user: User): Omit<UserProfile, 'createdAt' | 'lastLoginAt'> => ({
-  uid: user.uid,
-  email: user.email || '',
-  displayName: user.displayName || 'UPSC Aspirant',
-  photoURL: user.photoURL,
-  plan: 'Free',
-  tokens: 500, // Starting tokens
-  streak: 0,
-  longestStreak: 0,
-  efficiency: 0,
-  targetExam: 'UPSC CSE 2025',
-  isAdmin: isAdmin(user.email),
-  testsCompleted: 0,
-  totalStudyTime: 0,
-  averageScore: 0,
-  subjects: {
-    polity: 50,
-    history: 50,
-    geography: 50,
-    economy: 50,
-    environment: 50,
-    science: 50,
-    currentAffairs: 50,
-    ethics: 50,
-  },
-});
+const createDefaultProfile = (user: User): Omit<UserProfile, 'createdAt' | 'lastLoginAt'> => {
+  const isVero = isVeroAdmin(user.email);
+  
+  return {
+    uid: user.uid,
+    email: user.email || '',
+    displayName: user.displayName || 'UPSC Aspirant',
+    photoURL: user.photoURL,
+    role: isVero ? 'vero' : 'student',
+    plan: isVero ? 'Lifetime' : 'Free',
+    tokens: isVero ? 999999 : 500,
+    streak: 0,
+    longestStreak: 0,
+    efficiency: 0,
+    targetExam: 'UPSC CSE 2025',
+    isAdmin: isVero,
+    paymentStatus: isVero ? 'lifetime' : 'none',
+    paymentExpiry: null,
+    lifetimeAccess: isVero,
+    batchId: null,
+    batchName: null,
+    facultyId: null,
+    testsCompleted: 0,
+    totalStudyTime: 0,
+    averageScore: 0,
+    subjects: {
+      polity: 50,
+      history: 50,
+      geography: 50,
+      economy: 50,
+      environment: 50,
+      science: 50,
+      currentAffairs: 50,
+      ethics: 50,
+    },
+  };
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Role helpers
+  const isVero = userProfile?.role === 'vero' || isVeroAdmin(userProfile?.email);
+  const isFaculty = userProfile?.role === 'faculty';
+  const isStudent = userProfile?.role === 'student' || (!isVero && !isFaculty);
 
   // Fetch or create user profile from Firestore
   const fetchOrCreateUserProfile = async (firebaseUser: User): Promise<UserProfile | null> => {
@@ -102,18 +136,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userSnap = await getDoc(userRef);
 
       if (userSnap.exists()) {
-        // Update last login
+        // Update last login and check if VERO status changed
+        const isVero = isVeroAdmin(firebaseUser.email);
         await updateDoc(userRef, {
           lastLoginAt: serverTimestamp(),
-          // Update admin status in case it changed
-          isAdmin: isAdmin(firebaseUser.email),
+          isAdmin: isVero,
+          // Auto-upgrade to vero role if email matches
+          ...(isVero && { role: 'vero', plan: 'Lifetime', lifetimeAccess: true, paymentStatus: 'lifetime' }),
         });
         
         const data = userSnap.data();
         return {
           ...data,
+          uid: firebaseUser.uid,
+          isAdmin: isVero || data.isAdmin,
+          role: isVero ? 'vero' : (data.role || 'student'),
           createdAt: data.createdAt?.toDate() || new Date(),
           lastLoginAt: new Date(),
+          paymentExpiry: data.paymentExpiry?.toDate() || null,
         } as UserProfile;
       } else {
         // Create new profile
@@ -124,9 +164,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           lastLoginAt: serverTimestamp(),
         });
         
-        // Also create initial collections for the user
-        await initializeUserCollections(firebaseUser.uid);
-        
         return {
           ...defaultProfile,
           createdAt: new Date(),
@@ -136,22 +173,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Error fetching/creating user profile:', error);
       return null;
-    }
-  };
-
-  // Initialize user collections (quiz_history, grading_history, etc.)
-  const initializeUserCollections = async (uid: string) => {
-    try {
-      // Create analytics document
-      await setDoc(doc(db, 'analytics', uid), {
-        uid,
-        dailyQuizzes: [],
-        weeklyProgress: [],
-        monthlyProgress: [],
-        createdAt: serverTimestamp(),
-      });
-    } catch (error) {
-      console.error('Error initializing user collections:', error);
     }
   };
 
@@ -211,8 +232,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         createdAt: serverTimestamp(),
         lastLoginAt: serverTimestamp(),
       });
-      
-      await initializeUserCollections(result.user.uid);
     } catch (error) {
       console.error('Email sign up error:', error);
       throw error;
@@ -236,7 +255,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, data);
+      const cleanData: Record<string, any> = { ...data };
+      
+      // Remove fields that shouldn't be directly updated
+      delete cleanData.createdAt;
+      delete cleanData.lastLoginAt;
+      delete cleanData.uid;
+      
+      await updateDoc(userRef, cleanData);
       
       setUserProfile(prev => prev ? { ...prev, ...data } : null);
     } catch (error) {
@@ -257,8 +283,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = userSnap.data();
         setUserProfile({
           ...data,
+          uid: user.uid,
           createdAt: data.createdAt?.toDate() || new Date(),
           lastLoginAt: data.lastLoginAt?.toDate() || new Date(),
+          paymentExpiry: data.paymentExpiry?.toDate() || null,
         } as UserProfile);
       }
     } catch (error) {
@@ -287,8 +315,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const deductTokens = async (amount: number): Promise<boolean> => {
     if (!user || !userProfile) return false;
     
+    // VERO and lifetime users have unlimited tokens
+    if (isVero || userProfile.lifetimeAccess) {
+      return true;
+    }
+    
     if (userProfile.tokens < amount) {
-      return false; // Not enough tokens
+      return false;
     }
     
     try {
@@ -326,14 +359,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user || !userProfile) return;
     
     try {
-      const currentScore = userProfile.subjects[subject as keyof typeof userProfile.subjects] || 50;
-      // Running average
+      const subjectKey = subject.toLowerCase().replace(/\s+/g, '') as keyof typeof userProfile.subjects;
+      const currentScore = userProfile.subjects[subjectKey] || 50;
       const newScore = Math.round((currentScore * 0.7) + (score * 0.3));
       
       await updateUserProfile({
         subjects: {
           ...userProfile.subjects,
-          [subject]: Math.min(100, Math.max(0, newScore)),
+          [subjectKey]: Math.min(100, Math.max(0, newScore)),
         },
       });
     } catch (error) {
@@ -345,6 +378,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     userProfile,
     loading,
+    isVero,
+    isFaculty,
+    isStudent,
     signInWithGoogle,
     signInWithEmail,
     signUpWithEmail,

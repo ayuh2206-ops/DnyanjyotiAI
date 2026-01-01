@@ -58,7 +58,7 @@ export const ToolsView: React.FC = () => {
       setIsFlipped(false);
       
       // Deduct tokens
-      await deductTokens(data.tokensUsed || 10, 'flashcard_generation');
+      await deductTokens(data.tokensUsed || 10);
       
       setToast({ message: `Generated ${data.flashcards.length} flashcards!`, type: 'success' });
     } catch (error: any) {
@@ -109,7 +109,7 @@ export const ToolsView: React.FC = () => {
       }
 
       setSummarizedContent(data.summary);
-      await deductTokens(data.tokensUsed || 5, 'summarization');
+      await deductTokens(data.tokensUsed || 5);
       
       setToast({ message: 'Text summarized successfully!', type: 'success' });
     } catch (error: any) {

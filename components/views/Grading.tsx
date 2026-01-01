@@ -123,17 +123,21 @@ export const Grading: React.FC = () => {
 
       await deductTokens(tokenCost);
       
-      setResult(data.result);
+      setResult(data.grading);
       
       // Save to database
       await saveGradingResult({
         userId: user.uid,
-        questionType,
+        questionType: (questionType === 'essay' ? 'Essay' : questionType.toUpperCase()) as 'GS1' | 'GS2' | 'GS3' | 'GS4' | 'Essay',
         question,
         answer,
         wordCount,
-        score: data.result.totalScore,
-        feedback: data.result,
+        score: data.grading.totalScore,
+        feedback: data.grading.breakdown,
+        strengths: data.grading.strengths || [],
+        weaknesses: data.grading.weaknesses || [],
+        suggestions: data.grading.suggestions || [],
+        modelAnswer: data.grading.modelAnswer,
         tokensUsed: data.tokensUsed,
         mode: gradingMode,
       });

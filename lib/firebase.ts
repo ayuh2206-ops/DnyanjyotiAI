@@ -34,10 +34,18 @@ export const initAnalytics = async () => {
   return null;
 };
 
-// Admin email check
-export const ADMIN_EMAIL = "vero.media.150@gmail.com";
+// VERO (Super Admin) email - has full platform control
+export const VERO_EMAIL = "vero.media.150@gmail.com";
+
+// Legacy support
+export const ADMIN_EMAIL = VERO_EMAIL;
+
 export const isAdmin = (email: string | null | undefined): boolean => {
-  return email === ADMIN_EMAIL;
+  return email === VERO_EMAIL;
+};
+
+export const isVeroAdmin = (email: string | null | undefined): boolean => {
+  return email === VERO_EMAIL;
 };
 
 export default app;

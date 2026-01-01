@@ -15,7 +15,7 @@ interface Question {
 }
 
 interface QuizHistory {
-  id: string;
+  id?: string;
   subject: string;
   score: number;
   totalQuestions: number;
@@ -170,7 +170,8 @@ export const Practice: React.FC = () => {
     
     // Save to database
     try {
-      await saveQuizResult(user.uid, {
+      await saveQuizResult({
+        userId: user.uid,
         quizType: 'mock_test',
         subject: selectedSubject,
         score,
@@ -179,6 +180,7 @@ export const Practice: React.FC = () => {
         difficulty,
         questions: questions.map(q => ({
           question: q.question,
+          options: q.options,
           correctAnswer: q.correct,
           userAnswer: q.userAnswer || 'Not answered',
           isCorrect: q.userAnswer === q.correct,
