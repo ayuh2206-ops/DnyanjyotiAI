@@ -20,7 +20,7 @@ interface GradingResult {
 }
 
 interface GradingHistory {
-  id: string;
+  id?: string;
   questionType: string;
   question: string;
   score: number;
@@ -126,7 +126,8 @@ export const Grading: React.FC = () => {
       setResult(data.result);
       
       // Save to database
-      await saveGradingResult(user.uid, {
+      await saveGradingResult({
+        userId: user.uid,
         questionType,
         question,
         answer,
