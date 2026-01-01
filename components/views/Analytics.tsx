@@ -111,7 +111,8 @@ export const AnalyticsView: React.FC = () => {
 
   // Calculate radar points for SVG
   const radarPoints = () => {
-    const subjects: (keyof typeof userProfile.subjects)[] = ['polity', 'history', 'science', 'economy', 'environment', 'currentAffairs'];
+    type SubjectKey = 'polity' | 'history' | 'science' | 'economy' | 'environment' | 'currentAffairs';
+    const subjects: SubjectKey[] = ['polity', 'history', 'science', 'economy', 'environment', 'currentAffairs'];
     const scores = subjects.map(s => (userProfile?.subjects?.[s] || 50) / 100);
     
     const centerX = 100;
