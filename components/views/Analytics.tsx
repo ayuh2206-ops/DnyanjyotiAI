@@ -37,7 +37,7 @@ export const AnalyticsView: React.FC = () => {
         setLoading(true);
         const [weekly, history] = await Promise.all([
           getWeeklyActivity(userProfile.uid),
-          getQuizHistory(userProfile.uid, 10)
+          getQuizHistory(userProfile.uid, undefined, 10)
         ]);
         
         // Process weekly data
@@ -81,7 +81,7 @@ export const AnalyticsView: React.FC = () => {
     ];
 
     return subjects.map(s => {
-      const score = userProfile.subjects[s.key] || 50;
+      const score = userProfile.subjects[s.key as keyof typeof userProfile.subjects] || 50;
       let status: 'High' | 'Avg' | 'Low';
       let color: string;
       let textColor: string;
@@ -111,7 +111,7 @@ export const AnalyticsView: React.FC = () => {
 
   // Calculate radar points for SVG
   const radarPoints = () => {
-    const subjects = ['polity', 'history', 'science', 'economy', 'environment', 'currentAffairs'];
+    const subjects: (keyof typeof userProfile.subjects)[] = ['polity', 'history', 'science', 'economy', 'environment', 'currentAffairs'];
     const scores = subjects.map(s => (userProfile?.subjects?.[s] || 50) / 100);
     
     const centerX = 100;

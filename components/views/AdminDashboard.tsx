@@ -10,7 +10,6 @@ interface SystemStats {
   activeToday: number;
   totalQuizzes: number;
   totalGradings: number;
-  totalChatSessions: number;
   totalTokensUsed: number;
 }
 
@@ -47,7 +46,7 @@ export const AdminDashboard: React.FC = () => {
           getSystemStats()
         ]);
         
-        setUsers(usersData);
+        setUsers(usersData as UserData[]);
         setStats(systemStats);
       } catch (error) {
         console.error('Error fetching admin data:', error);
@@ -233,14 +232,14 @@ export const AdminDashboard: React.FC = () => {
                 <div className="flex justify-between items-center p-3 rounded-lg bg-white/5">
                   <div className="flex items-center gap-3">
                     <div className="size-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-purple-400">forum</span>
+                      <span className="material-symbols-outlined text-purple-400">token</span>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-white">Chat Sessions</p>
-                      <p className="text-xs text-[#c9ad92]">Today</p>
+                      <p className="text-sm font-medium text-white">Tokens Used</p>
+                      <p className="text-xs text-[#c9ad92]">Total</p>
                     </div>
                   </div>
-                  <span className="text-xl font-bold text-white">{stats?.totalChatSessions || 0}</span>
+                  <span className="text-xl font-bold text-white">{stats?.totalTokensUsed || 0}</span>
                 </div>
               </div>
             </GlassCard>

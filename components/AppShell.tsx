@@ -7,9 +7,9 @@ import { Chat } from './views/Chat';
 import { Login } from './views/Login';
 import { AdminDashboard } from './views/AdminDashboard';
 import { DashboardView } from './views/Dashboard';
-import { DailyAffairsView } from './views/DailyAffairs';
-import { PracticeView } from './views/Practice';
-import { GradingView } from './views/Grading';
+import { DailyAffairs } from './views/DailyAffairs';
+import { Practice } from './views/Practice';
+import { Grading } from './views/Grading';
 import { AnalyticsView } from './views/Analytics';
 import { ToolsView } from './views/Tools';
 import { ProfileView } from './views/Profile';
@@ -62,11 +62,11 @@ export default function AppShell() {
       case 'dashboard':
         return <DashboardView />;
       case 'daily_affairs':
-        return <DailyAffairsView />;
+        return <DailyAffairs />;
       case 'practice':
-        return <PracticeView />;
+        return <Practice />;
       case 'grading':
-        return <GradingView />;
+        return <Grading />;
       case 'analytics':
         return <AnalyticsView />;
       case 'tools':

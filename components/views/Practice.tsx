@@ -79,7 +79,7 @@ export const Practice: React.FC = () => {
   const loadQuizHistory = async () => {
     if (!user?.uid) return;
     try {
-      const history = await getQuizHistory(user.uid, 10);
+      const history = await getQuizHistory(user.uid, undefined, 10);
       setQuizHistory(history);
     } catch (error) {
       console.error('Error loading quiz history:', error);
