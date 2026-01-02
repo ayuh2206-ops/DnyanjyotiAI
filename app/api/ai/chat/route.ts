@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
     if (!message) {
       return NextResponse.json(
-        { error: 'Message is required' },
+        { error: 'Message is required', success: false },
         { status: 400 }
       );
     }
@@ -30,10 +30,16 @@ export async function POST(request: NextRequest) {
       tokensUsed: response.tokensUsed,
       model: response.model,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Chat API error:', error);
+    
+    // Check for specific error types
+    const errorMessage = error.message?.includes('API key') 
+      ? 'AI service is not configured. Please contact support.'
+      : 'Failed to generate response. Please try again.';
+    
     return NextResponse.json(
-      { error: 'Failed to generate response' },
+      { error: errorMessage, success: false },
       { status: 500 }
     );
   }

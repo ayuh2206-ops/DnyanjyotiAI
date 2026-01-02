@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     if (!subject) {
       return NextResponse.json(
-        { error: 'Subject is required' },
+        { error: 'Subject is required', success: false },
         { status: 400 }
       );
     }
@@ -26,6 +26,19 @@ export async function POST(request: NextRequest) {
     // Parse the quiz questions from the response
     const questions = parseQuizQuestions(response.text);
 
+    if (questions.length === 0) {
+      // If parsing failed, generate fallback questions
+      console.warn('Quiz parsing failed, generating fallback questions');
+      return NextResponse.json({
+        success: true,
+        questions: generateFallbackQuestions(subject, count),
+        rawResponse: response.text,
+        tokensUsed: response.tokensUsed,
+        model: response.model,
+        warning: 'Generated questions may need review',
+      });
+    }
+
     return NextResponse.json({
       success: true,
       questions,
@@ -33,10 +46,15 @@ export async function POST(request: NextRequest) {
       tokensUsed: response.tokensUsed,
       model: response.model,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Quiz API error:', error);
+    
+    const errorMessage = error.message?.includes('API key') 
+      ? 'AI service is not configured. Please contact support.'
+      : 'Failed to generate quiz. Please try again.';
+    
     return NextResponse.json(
-      { error: 'Failed to generate quiz' },
+      { error: errorMessage, success: false },
       { status: 500 }
     );
   }
@@ -96,4 +114,18 @@ function parseQuizQuestions(text: string): ParsedQuestion[] {
   }
   
   return questions;
+}
+
+// Generate fallback questions if AI parsing fails
+function generateFallbackQuestions(subject: string, count: number): ParsedQuestion[] {
+  const fallbackQuestions: ParsedQuestion[] = [
+    {
+      question: `Which of the following is a key concept in ${subject}?`,
+      options: ['Constitutional provision', 'Economic theory', 'Scientific principle', 'Historical event'],
+      correctAnswer: 'A',
+      explanation: 'This is a sample question. Please regenerate for accurate content.',
+    },
+  ];
+  
+  return fallbackQuestions.slice(0, count);
 }

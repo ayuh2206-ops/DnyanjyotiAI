@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
     if (!text) {
       return NextResponse.json(
-        { error: 'Text content is required' },
+        { error: 'Text content is required', success: false },
         { status: 400 }
       );
     }
@@ -30,7 +30,14 @@ export async function POST(request: NextRequest) {
       }
     } catch (parseError) {
       console.error('Error parsing flashcards:', parseError);
-      flashcards = [];
+      // Return sample flashcards if parsing fails
+      flashcards = [
+        {
+          front: 'Sample flashcard - parsing failed',
+          back: 'Please try again with different content',
+          topic: 'System'
+        }
+      ];
     }
 
     return NextResponse.json({
@@ -39,10 +46,15 @@ export async function POST(request: NextRequest) {
       tokensUsed: response.tokensUsed,
       model: response.model,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Flashcards API error:', error);
+    
+    const errorMessage = error.message?.includes('API key') 
+      ? 'AI service is not configured. Please contact support.'
+      : 'Failed to generate flashcards. Please try again.';
+    
     return NextResponse.json(
-      { error: 'Failed to generate flashcards' },
+      { error: errorMessage, success: false },
       { status: 500 }
     );
   }

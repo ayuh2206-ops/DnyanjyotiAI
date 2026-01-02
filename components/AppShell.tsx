@@ -50,21 +50,23 @@ const NAV_ITEMS: NavItem[] = [
 
 export default function AppShell() {
   const { user, userProfile, loading, signOut, isVero, isFaculty, isStudent } = useAuth();
-  const [currentView, setCurrentView] = useState<View>('dashboard');
+  const [currentView, setCurrentView] = useState<View>('home');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [initialViewSet, setInitialViewSet] = useState(false);
 
-  // Set initial view based on role
+  // Set initial view based on role - only on first load
   useEffect(() => {
-    if (userProfile) {
+    if (userProfile && !initialViewSet) {
       if (isVero) {
         setCurrentView('vero_dashboard');
       } else if (isFaculty) {
         setCurrentView('faculty_dashboard');
       } else {
-        setCurrentView('dashboard');
+        setCurrentView('home');
       }
+      setInitialViewSet(true);
     }
-  }, [userProfile, isVero, isFaculty]);
+  }, [userProfile, isVero, isFaculty, initialViewSet]);
 
   // Get user's role
   const getUserRole = (): 'student' | 'faculty' | 'vero' => {

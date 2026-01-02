@@ -1,17 +1,22 @@
 // Gemini AI Integration
 // Server-side only - use in API routes
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AIzaSyCBPc9dTmq1mkQP_ILrrlfnSYrMyEA3_0U";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+// Check if API key is configured
+if (!GEMINI_API_KEY) {
+  console.warn('GEMINI_API_KEY is not configured. AI features will not work.');
+}
 
 // Model configurations
 const MODELS = {
   flash: {
-    name: 'gemini-2.5-flash-preview-05-20',
+    name: 'gemini-2.0-flash-exp',
     temperature: 0.7,
     maxTokens: 2048,
   },
   pro: {
-    name: 'gemini-2.5-pro-preview-05-06',
+    name: 'gemini-1.5-pro',
     temperature: 0.9,
     maxTokens: 4096,
   },
@@ -42,6 +47,11 @@ export async function generateContent(
   prompt: string,
   options: GenerateOptions = {}
 ): Promise<GeminiResponse> {
+  // Check for API key
+  if (!GEMINI_API_KEY) {
+    throw new Error('Gemini API key is not configured. Please set GEMINI_API_KEY environment variable.');
+  }
+
   const {
     mode = 'fast',
     temperature,
@@ -76,7 +86,8 @@ export async function generateContent(
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Gemini API error response:', errorData);
       throw new Error(`Gemini API error: ${errorData.error?.message || response.statusText}`);
     }
 
@@ -84,6 +95,10 @@ export async function generateContent(
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const tokensUsed = data.usageMetadata?.totalTokenCount || 0;
+
+    if (!text) {
+      throw new Error('Empty response from Gemini API');
+    }
 
     return {
       text,

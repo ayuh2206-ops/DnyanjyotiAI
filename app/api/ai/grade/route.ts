@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
     if (!question || !answer) {
       return NextResponse.json(
-        { error: 'Question and answer are required' },
+        { error: 'Question and answer are required', success: false },
         { status: 400 }
       );
     }
@@ -52,10 +52,15 @@ export async function POST(request: NextRequest) {
       tokensUsed: response.tokensUsed,
       model: response.model,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Grading API error:', error);
+    
+    const errorMessage = error.message?.includes('API key') 
+      ? 'AI service is not configured. Please contact support.'
+      : 'Failed to grade essay. Please try again.';
+    
     return NextResponse.json(
-      { error: 'Failed to grade essay' },
+      { error: errorMessage, success: false },
       { status: 500 }
     );
   }

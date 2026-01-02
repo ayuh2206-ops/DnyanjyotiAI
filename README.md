@@ -1,28 +1,46 @@
 # DnyanGPT - AI-Powered UPSC Preparation Platform
 
-## 🚀 Production Ready - Three-Tier Role System
+<div align="center">
+  <img src="https://via.placeholder.com/200x200?text=DnyanGPT" alt="DnyanGPT Logo" width="200" />
+  <h3>Your AI-Powered UPSC Preparation Suite</h3>
+</div>
 
-This is the complete production-ready codebase for DnyanGPT with the three-tier role-based access system.
+## 🚀 Phase 1 - Production Ready
 
-### Role Hierarchy
+This is the Phase 1 release of DnyanGPT, featuring a three-tier role system (VERO/Faculty/Student), Firebase authentication, Firestore database, and Gemini AI integration.
 
-| Role | Access Level | Description |
-|------|--------------|-------------|
-| **VERO** | Super Admin | Full system control, all users, all data |
-| **Faculty** | Batch Admin | Manage assigned batches and students only |
-| **Student** | Standard | Personal account access |
+### Features
+
+- **🔐 Authentication**: Google OAuth & Email/Password login
+- **👑 Three-Tier Role System**:
+  - **VERO (Super Admin)**: Full platform control, user management, faculty assignment
+  - **Faculty**: Batch management, student progress tracking, analytics
+  - **Student**: Full access to learning features
+- **💬 UPSC-GPT Chat**: AI-powered Socratic tutor with subject-specific guidance
+- **📝 AI Quiz Generator**: Generate custom quizzes on any UPSC topic
+- **✍️ Essay Grading**: Get detailed AI feedback on your answer writing
+- **📊 Analytics Dashboard**: Track your progress across all subjects
+- **🎴 Flashcard Generator**: Create revision cards from your notes
+- **👤 Admin Dashboards**: Role-specific dashboards for VERO and Faculty
+
+### Tech Stack
+
+- **Frontend**: Next.js 14, React 18, TypeScript, Tailwind CSS
+- **Backend**: Firebase (Auth, Firestore)
+- **AI**: Google Gemini 2.0 Flash + 1.5 Pro
 
 ## 📁 Project Structure
 
 ```
-dnyangpt-production/
+dnyangpt-phase1/
 ├── app/
-│   ├── api/ai/
-│   │   ├── chat/route.ts
-│   │   ├── flashcards/route.ts
-│   │   ├── grade/route.ts
-│   │   ├── quiz/route.ts
-│   │   └── summarize/route.ts
+│   ├── api/
+│   │   └── ai/
+│   │       ├── chat/route.ts
+│   │       ├── quiz/route.ts
+│   │       ├── grade/route.ts
+│   │       ├── flashcards/route.ts
+│   │       └── summarize/route.ts
 │   ├── globals.css
 │   ├── layout.tsx
 │   └── page.tsx
@@ -33,24 +51,24 @@ dnyangpt-production/
 │   │   ├── Chat.tsx
 │   │   ├── DailyAffairs.tsx
 │   │   ├── Dashboard.tsx
-│   │   ├── FacultyDashboard.tsx   ← NEW
+│   │   ├── FacultyDashboard.tsx   # NEW: Faculty batch management
 │   │   ├── Grading.tsx
 │   │   ├── Home.tsx
 │   │   ├── Login.tsx
 │   │   ├── Practice.tsx
 │   │   ├── Profile.tsx
 │   │   ├── Tools.tsx
-│   │   └── VERODashboard.tsx      ← NEW
-│   ├── AppShell.tsx               ← UPDATED
+│   │   └── VERODashboard.tsx      # NEW: Super admin dashboard
+│   ├── AppShell.tsx
 │   └── UI.tsx
 ├── lib/
-│   ├── auth-context.tsx           ← UPDATED
-│   ├── db.ts                      ← UPDATED (1300+ lines)
-│   ├── firebase.ts                ← UPDATED
+│   ├── auth-context.tsx
+│   ├── db.ts
+│   ├── firebase.ts
 │   └── gemini.ts
 ├── .env.local.example
 ├── .gitignore
-├── firestore.rules                ← NEW
+├── firestore.rules
 ├── next.config.js
 ├── package.json
 ├── postcss.config.mjs
@@ -60,170 +78,149 @@ dnyangpt-production/
 
 ## 🛠️ Installation
 
-### 1. Extract and Setup
+### Local Development
 
-```bash
-# Extract the zip
-unzip dnyangpt-production.zip
-cd dnyangpt-production
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/ayuh2206-ops/DnyanjyotiAI.git
+   cd DnyanjyotiAI
+   ```
 
-# Install dependencies
-npm install
-```
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-### 2. Environment Variables
+3. **Set up environment variables**
+   ```bash
+   cp .env.local.example .env.local
+   ```
+   
+   Edit `.env.local` and add your Gemini API key:
+   ```
+   GEMINI_API_KEY=your_gemini_api_key_here
+   ```
 
-Create `.env.local`:
+4. **Run the development server**
+   ```bash
+   npm run dev
+   ```
 
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-```
+5. **Open in browser**
+   Navigate to [http://localhost:3000](http://localhost:3000)
 
-### 3. Firebase Setup
+### Vercel Deployment
 
-Firebase config is already in `lib/firebase.ts`. If using different project:
+1. **Push to GitHub** (main branch)
 
-```typescript
-// lib/firebase.ts
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.firebasestorage.app",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
-```
+2. **Connect to Vercel**
+   - Go to [vercel.com](https://vercel.com)
+   - Import your GitHub repository
+   - Select the main branch
 
-### 4. Deploy Firestore Rules
+3. **Configure Environment Variables** ⚠️ CRITICAL
+   In Vercel project settings → Environment Variables, add:
+   ```
+   GEMINI_API_KEY = your_gemini_api_key_here
+   ```
+   
+   **Get your Gemini API key from**: [Google AI Studio](https://aistudio.google.com/app/apikey)
 
-1. Go to Firebase Console → Firestore Database → Rules
-2. Copy content from `firestore.rules`
-3. Click "Publish"
+4. **Deploy**
+   - Vercel will auto-deploy on every push to main branch
 
-### 5. Run Development
+## 🔑 Role Access
 
-```bash
-npm run dev
-```
+| Role | Login Email | Access Level |
+|------|-------------|--------------|
+| **VERO** (Super Admin) | `vero.media.150@gmail.com` | Full platform control |
+| **Faculty** | Assigned by VERO | Batch & student management |
+| **Student** | Any registered user | All learning features |
 
-### 6. Deploy to Vercel
-
-```bash
-# Push to GitHub
-git init
-git add .
-git commit -m "Initial commit: DnyanGPT with three-tier roles"
-git remote add origin YOUR_GITHUB_REPO
-git push -u origin main
-
-# Connect to Vercel and deploy
-```
-
-## 🔐 Role System
-
-### VERO (Super Admin)
-- **Email**: `vero.media.150@gmail.com` (auto-assigned)
-- **Access**: Full system control
-- **Tokens**: Unlimited (999,999)
-- **Dashboard**: VERO Control Panel
-
-Features:
-- View/manage all users
-- Grant/revoke lifetime access
-- Promote users to Faculty
-- Bulk payment status updates
-- View admin action logs
+### VERO Dashboard Features
 - System-wide statistics
+- User management (grant/revoke access)
+- Faculty assignment
+- Payment tracking
+- Admin activity logs
 
-### Faculty
-- **Created by**: VERO via dashboard
-- **Access**: Batch-isolated
-- **Tokens**: Unlimited
-- **Dashboard**: Faculty Panel
-
-Features:
-- Create/manage batches
+### Faculty Dashboard Features
+- Create and manage batches
 - Add/remove students from batches
-- View student progress
-- Track batch performance
-- Cannot see students outside assigned batches
+- Track student progress
+- View batch analytics
 
-### Student (Default)
-- **Default role**: All new signups
-- **Access**: Personal only
-- **Tokens**: 500 (starting)
-- **Dashboard**: Standard views
+## 📊 Database Schema
 
-Features:
-- AI Chat, Quizzes, Grading
-- Personal analytics
-- Daily affairs
-- Study tools
+### Collections
 
-## 📊 Database Collections
+- **users**: User profiles, tokens, streak, subject scores, role, batch assignment
+- **faculties**: Faculty details and permissions
+- **batches**: Batch information, student lists
+- **payments**: Payment records
+- **quiz_history**: Quiz attempts and results
+- **grading_history**: Essay evaluations
+- **chat_sessions**: Chat conversation history
+- **daily_activity**: Aggregated daily metrics
+- **admin_logs**: Admin action audit trail
 
-| Collection | Purpose |
-|------------|---------|
-| `users` | User profiles with role, payment status |
-| `faculties` | Faculty records |
-| `batches` | Batch management |
-| `payments` | Payment history |
-| `admin_logs` | VERO action audit trail |
-| `quiz_history` | Quiz attempts |
-| `grading_history` | Essay evaluations |
-| `chat_sessions` | Chat conversations |
-| `daily_activity` | Daily metrics |
-| `study_sessions` | Study time logs |
+## 🤖 AI Models
 
-## 🔄 Payment Statuses
+| Model | Use Case | Temperature |
+|-------|----------|-------------|
+| Gemini 2.0 Flash | Chat, Quizzes, Flashcards | 0.7 |
+| Gemini 1.5 Pro | Essay Grading, Analysis | 0.9 |
 
-| Status | Description |
-|--------|-------------|
-| `lifetime` | Permanent access (never expires) |
-| `active` | Active paid subscription |
-| `expired` | Subscription expired |
-| `trial` | Trial period |
-| `none` | Free tier |
+## 🚧 Phase 1 Testing Checklist
 
-## ✅ Testing Checklist
+- [x] User registration (Google + Email)
+- [x] Three-tier role system (VERO/Faculty/Student)
+- [x] VERO dashboard with full admin controls
+- [x] Faculty dashboard with batch management
+- [x] Token deduction on AI operations
+- [x] Quiz generation and submission
+- [x] Essay grading workflow
+- [x] Chat message persistence
+- [x] Streak counter updates
+- [x] Subject score calculations
+- [x] Weekly activity data
+- [x] Profile updates sync
+- [x] Mobile responsive layout
 
-- [ ] VERO login with `vero.media.150@gmail.com`
-- [ ] VERO Dashboard loads with all tabs
-- [ ] VERO can view all users
-- [ ] VERO can grant lifetime access
-- [ ] VERO can promote user to Faculty
-- [ ] Faculty Dashboard loads for faculty users
-- [ ] Faculty can create batches
-- [ ] Faculty can add students to batches
-- [ ] Faculty can view student progress
-- [ ] Faculty CANNOT see students outside their batches
-- [ ] Students see standard dashboard
-- [ ] Students CANNOT access admin views
-- [ ] Token deduction works for students
-- [ ] Admin logs record VERO actions
+## 🔧 Troubleshooting
 
-## 🐛 Troubleshooting
+### AI Features Not Working
+1. Check that `GEMINI_API_KEY` is set in Vercel environment variables
+2. Ensure the API key is valid (get from [Google AI Studio](https://aistudio.google.com/app/apikey))
+3. Check Vercel deployment logs for errors
 
-### Permission Denied Errors
-- Deploy `firestore.rules` to Firebase Console
-- Verify user role in Firestore users collection
-- Check indexes are created
+### Page Redirects Unexpectedly
+- Ensure you're using the latest code with the navigation fix
+- Clear browser cache and cookies
 
-### Faculty Can't See Students
-- Verify batch has `facultyId` set correctly
-- Check student has `batchId` and `facultyId` fields
-- Verify faculty record exists in `faculties` collection
+### Firebase Errors
+- Verify Firebase project is properly configured
+- Check Firestore rules are deployed
 
-### VERO Features Not Working
-- Clear browser cache and re-login
-- Verify email matches exactly: `vero.media.150@gmail.com`
-- Check user document has `role: 'vero'` in Firestore
+## 🔮 Phase 2 Preview
 
-## 📝 License
+- n8n automation integration
+- Additional AI models (Claude 3.5, GPT-4)
+- OCR Pipeline for handwritten answers
+- Real-time collaboration
+- Push notifications
+- Payment integration (Razorpay)
 
-MIT License
+## 📄 License
+
+MIT License - see LICENSE file for details
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read our contributing guidelines before submitting PRs.
 
 ---
 
-Built with ❤️ for UPSC Aspirants
+<div align="center">
+  <p>Built with ❤️ for UPSC Aspirants</p>
+</div>
