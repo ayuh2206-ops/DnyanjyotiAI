@@ -8,9 +8,16 @@ import { GlassCard, Button, Badge, Skeleton, Avatar } from '../UI';
 interface SystemStats {
   totalUsers: number;
   activeToday: number;
+  totalStudents: number;
+  totalFaculties: number;
+  totalBatches: number;
   totalQuizzes: number;
   totalGradings: number;
-  totalTokensUsed: number;
+  activeSubscriptions: number;
+  lifetimeUsers: number;
+  expiredUsers: number;
+  freeUsers: number;
+  totalRevenue: number;
 }
 
 interface UserData {
@@ -189,7 +196,7 @@ export const AdminDashboard: React.FC = () => {
               <p className="text-[#c9ad92] text-sm font-medium">Tokens in Circulation</p>
               <p className="text-3xl font-bold text-white mt-1">{totalTokensInCirculation.toLocaleString()}</p>
               <div className="text-xs text-[#c9ad92] mt-2">
-                ~{(stats?.totalTokensUsed || 0).toLocaleString()} used total
+                {totalTokensInCirculation.toLocaleString()} available
               </div>
             </GlassCard>
           </div>
@@ -239,7 +246,7 @@ export const AdminDashboard: React.FC = () => {
                       <p className="text-xs text-[#c9ad92]">Total</p>
                     </div>
                   </div>
-                  <span className="text-xl font-bold text-white">{stats?.totalTokensUsed || 0}</span>
+                  <span className="text-xl font-bold text-white">{totalTokensInCirculation.toLocaleString()}</span>
                 </div>
               </div>
             </GlassCard>
