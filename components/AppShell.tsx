@@ -99,7 +99,7 @@ export default function AppShell() {
         return (isFaculty || isVero) ? <FacultyDashboard /> : <DashboardView />;
       // Student views
       case 'home':
-        return <Home onNavigate={setCurrentView as (view: StudentView) => void} />;
+        return <Home onNavigate={(view: string) => setCurrentView(view as View)} />;
       case 'chat':
         return <Chat />;
       case 'dashboard':

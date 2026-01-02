@@ -560,8 +560,8 @@ export const VERODashboard: React.FC = () => {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {faculties.map(faculty => (
-              <GlassCard key={faculty.id} className="flex flex-col">
+            {faculties.map((faculty, index) => (
+              <GlassCard key={faculty.id || `faculty-${index}`} className="flex flex-col">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <Avatar src={faculty.photoURL} name={faculty.displayName} size="md" />
@@ -612,8 +612,8 @@ export const VERODashboard: React.FC = () => {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {batches.map(batch => (
-              <GlassCard key={batch.id}>
+            {batches.map((batch, index) => (
+              <GlassCard key={batch.id || `batch-${index}`}>
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h4 className="font-bold text-white">{batch.name}</h4>
@@ -667,8 +667,8 @@ export const VERODashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="text-sm">
-                {payments.map(payment => (
-                  <tr key={payment.id} className="border-b border-[#483623]/30">
+                {payments.map((payment, index) => (
+                  <tr key={payment.id || `payment-${index}`} className="border-b border-[#483623]/30">
                     <td className="py-3">
                       <p className="text-white">{payment.userName}</p>
                       <p className="text-xs text-[#c9ad92]">{payment.userEmail}</p>
@@ -707,8 +707,8 @@ export const VERODashboard: React.FC = () => {
         <GlassCard>
           <h3 className="text-lg font-bold text-white mb-4">Admin Activity Log</h3>
           <div className="space-y-3">
-            {adminLogs.map(log => (
-              <div key={log.id} className="p-3 rounded-lg bg-white/5 flex items-center justify-between">
+            {adminLogs.map((log, index) => (
+              <div key={log.id || `log-${index}`} className="p-3 rounded-lg bg-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="size-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
                     <span className="material-symbols-outlined text-purple-400">security</span>

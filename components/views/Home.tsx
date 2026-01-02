@@ -5,10 +5,11 @@ import { useAuth } from '@/lib/auth-context';
 import { getRecentActivity, RecentActivity } from '@/lib/db';
 import { GlassCard, Badge, Button } from '../UI';
 
-export type View = 'home' | 'dashboard' | 'daily_affairs' | 'practice' | 'grading' | 'tools' | 'chat' | 'analytics' | 'profile' | 'admin';
+// View types - includes all possible navigation targets
+export type View = 'home' | 'dashboard' | 'daily_affairs' | 'practice' | 'grading' | 'tools' | 'chat' | 'analytics' | 'profile' | 'admin' | 'vero_dashboard' | 'faculty_dashboard';
 
 interface HomeProps {
-  onNavigate: (view: View) => void;
+  onNavigate: (view: string) => void;
 }
 
 export const Home: React.FC<HomeProps> = ({ onNavigate }) => {

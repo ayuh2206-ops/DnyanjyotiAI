@@ -291,9 +291,9 @@ export const FacultyDashboard: React.FC = () => {
               </Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {batches.slice(0, 3).map(batch => (
+              {batches.slice(0, 3).map((batch, index) => (
                 <div
-                  key={batch.id}
+                  key={batch.id || `batch-overview-${index}`}
                   onClick={() => { setSelectedBatch(batch); setActiveTab('students'); handleSelectBatch(batch); }}
                   className="p-4 rounded-lg bg-white/5 border border-white/10 hover:border-blue-500/30 cursor-pointer transition-all"
                 >
@@ -328,8 +328,8 @@ export const FacultyDashboard: React.FC = () => {
       {/* Batches Tab */}
       {activeTab === 'batches' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {batches.map(batch => (
-            <GlassCard key={batch.id} className="flex flex-col">
+          {batches.map((batch, index) => (
+            <GlassCard key={batch.id || `batch-${index}`} className="flex flex-col">
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h4 className="font-bold text-white">{batch.name}</h4>
@@ -403,8 +403,8 @@ export const FacultyDashboard: React.FC = () => {
                 className="w-full px-4 py-2 rounded-lg bg-[#2c2219] border border-[#483623] text-white"
               >
                 <option value="">Select a batch...</option>
-                {batches.map(batch => (
-                  <option key={batch.id} value={batch.id}>{batch.name} ({batch.studentCount} students)</option>
+                {batches.map((batch, index) => (
+                  <option key={batch.id || `batch-select-${index}`} value={batch.id || ''}>{batch.name} ({batch.studentCount} students)</option>
                 ))}
               </select>
             </div>
@@ -662,7 +662,7 @@ export const FacultyDashboard: React.FC = () => {
                 <div>
                   <h4 className="text-white font-bold mb-3">Subject Performance</h4>
                   <div className="space-y-3">
-                    {Object.entries(studentProgress.subjectScores).map(([subject, score]) => (
+                    {(Object.entries(studentProgress.subjectScores) as [string, number][]).map(([subject, score]) => (
                       <div key={subject}>
                         <div className="flex justify-between text-sm mb-1">
                           <span className="text-[#c9ad92] capitalize">{subject}</span>
@@ -678,8 +678,8 @@ export const FacultyDashboard: React.FC = () => {
                 <div>
                   <h4 className="text-white font-bold mb-3">Recent Quizzes</h4>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {studentProgress.quizzes.slice(0, 5).map(quiz => (
-                      <div key={quiz.id} className="flex justify-between items-center p-2 rounded-lg bg-white/5">
+                    {studentProgress.quizzes.slice(0, 5).map((quiz, index) => (
+                      <div key={quiz.id || `quiz-${index}`} className="flex justify-between items-center p-2 rounded-lg bg-white/5">
                         <div>
                           <p className="text-sm text-white">{quiz.subject}</p>
                           <p className="text-xs text-[#c9ad92]">{new Date(quiz.createdAt).toLocaleDateString()}</p>
