@@ -3,15 +3,10 @@
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// Check if API key is configured
-if (!GEMINI_API_KEY) {
-  console.warn('GEMINI_API_KEY is not configured. AI features will not work.');
-}
-
-// Model configurations
+// Model configurations - using stable models
 const MODELS = {
   flash: {
-    name: 'gemini-2.0-flash-exp',
+    name: 'gemini-1.5-flash',
     temperature: 0.7,
     maxTokens: 2048,
   },
@@ -49,7 +44,8 @@ export async function generateContent(
 ): Promise<GeminiResponse> {
   // Check for API key
   if (!GEMINI_API_KEY) {
-    throw new Error('Gemini API key is not configured. Please set GEMINI_API_KEY environment variable.');
+    console.error('GEMINI_API_KEY is not set in environment variables');
+    throw new Error('AI service not configured. Please set GEMINI_API_KEY in Vercel environment variables.');
   }
 
   const {
@@ -77,6 +73,8 @@ export async function generateContent(
   };
 
   try {
+    console.log(`Calling Gemini API with model: ${modelName}`);
+    
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -85,28 +83,30 @@ export async function generateContent(
       body: JSON.stringify(requestBody),
     });
 
+    const responseData = await response.json();
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Gemini API error response:', errorData);
-      throw new Error(`Gemini API error: ${errorData.error?.message || response.statusText}`);
+      console.error('Gemini API error response:', JSON.stringify(responseData, null, 2));
+      throw new Error(`Gemini API error: ${responseData.error?.message || response.statusText}`);
     }
 
-    const data = await response.json();
-
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const tokensUsed = data.usageMetadata?.totalTokenCount || 0;
+    const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const tokensUsed = responseData.usageMetadata?.totalTokenCount || 0;
 
     if (!text) {
+      console.error('Empty response from Gemini:', JSON.stringify(responseData, null, 2));
       throw new Error('Empty response from Gemini API');
     }
+
+    console.log(`Gemini response received: ${text.substring(0, 100)}...`);
 
     return {
       text,
       tokensUsed,
       model: modelName,
     };
-  } catch (error) {
-    console.error('Gemini API error:', error);
+  } catch (error: any) {
+    console.error('Gemini API error:', error.message);
     throw error;
   }
 }

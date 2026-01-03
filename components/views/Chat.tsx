@@ -124,11 +124,12 @@ export const Chat: React.FC = () => {
       } else {
         throw new Error(data.error || 'Failed to get response');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Chat error:', error);
+      const errorMessage = error.message || "I apologize, but I encountered an error. Please try again.";
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: "I apologize, but I encountered an error. Please try again.",
+        content: `⚠️ ${errorMessage}`,
         timestamp: new Date()
       }]);
     } finally {

@@ -125,9 +125,12 @@ export const Practice: React.FC = () => {
       setQuizCompleted(false);
       setTimeLeft(questionCount * 60); // 1 minute per question
       setActiveTab('quiz');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating quiz:', error);
-      alert('Failed to generate quiz. Please try again.');
+      const errorMsg = error.message || 'Failed to generate quiz. Please try again.';
+      alert(errorMsg.includes('GEMINI_API_KEY') 
+        ? 'AI service not configured. Admin needs to add GEMINI_API_KEY in Vercel settings.' 
+        : errorMsg);
     } finally {
       setLoading(false);
     }
