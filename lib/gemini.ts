@@ -3,15 +3,15 @@
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// Model configurations - using stable models
+// Model configurations - using latest Gemini models
 const MODELS = {
   flash: {
-    name: 'gemini-1.5-flash',
+    name: 'gemini-2.0-flash',  // Latest stable flash model
     temperature: 0.7,
     maxTokens: 2048,
   },
   pro: {
-    name: 'gemini-1.5-pro',
+    name: 'gemini-2.5-pro-preview-05-06',  // Latest 2.5 pro preview
     temperature: 0.9,
     maxTokens: 4096,
   },
@@ -32,8 +32,11 @@ interface GeminiResponse {
   model: string;
 }
 
+// Helper function to delay execution
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 /**
- * Generate content using Gemini AI
+ * Generate content using Gemini AI with retry logic
  * @param prompt - User prompt
  * @param options - Generation options
  * @returns Generated text and metadata
@@ -72,43 +75,69 @@ export async function generateContent(
     },
   };
 
-  try {
-    console.log(`Calling Gemini API with model: ${modelName}`);
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
+  // Retry logic with exponential backoff
+  const maxRetries = 3;
+  let lastError: Error | null = null;
 
-    const responseData = await response.json();
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        // Wait before retry: 2s, 4s, 8s
+        const waitTime = Math.pow(2, attempt) * 1000;
+        console.log(`Retry attempt ${attempt + 1}, waiting ${waitTime}ms...`);
+        await delay(waitTime);
+      }
 
-    if (!response.ok) {
-      console.error('Gemini API error response:', JSON.stringify(responseData, null, 2));
-      throw new Error(`Gemini API error: ${responseData.error?.message || response.statusText}`);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        const errorMessage = responseData.error?.message || response.statusText;
+        
+        // Check if it's a rate limit error (429) - retry
+        if (response.status === 429 || errorMessage.toLowerCase().includes('rate') || errorMessage.toLowerCase().includes('quota')) {
+          console.warn(`Rate limit hit, attempt ${attempt + 1}/${maxRetries}`);
+          lastError = new Error(`Rate limit exceeded`);
+          continue; // Try again
+        }
+        
+        // For other errors, throw immediately
+        console.error('Gemini API error response:', JSON.stringify(responseData, null, 2));
+        throw new Error(`Gemini API error: ${errorMessage}`);
+      }
+
+      const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const tokensUsed = responseData.usageMetadata?.totalTokenCount || 0;
+
+      if (!text) {
+        console.error('Empty response from Gemini:', JSON.stringify(responseData, null, 2));
+        throw new Error('Empty response from Gemini API');
+      }
+
+      return {
+        text,
+        tokensUsed,
+        model: modelName,
+      };
+    } catch (error: any) {
+      lastError = error;
+      
+      // If it's not a rate limit error, don't retry
+      if (!error.message?.includes('Rate limit') && !error.message?.includes('429')) {
+        throw error;
+      }
     }
-
-    const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const tokensUsed = responseData.usageMetadata?.totalTokenCount || 0;
-
-    if (!text) {
-      console.error('Empty response from Gemini:', JSON.stringify(responseData, null, 2));
-      throw new Error('Empty response from Gemini API');
-    }
-
-    console.log(`Gemini response received: ${text.substring(0, 100)}...`);
-
-    return {
-      text,
-      tokensUsed,
-      model: modelName,
-    };
-  } catch (error: any) {
-    console.error('Gemini API error:', error.message);
-    throw error;
   }
+
+  // All retries failed
+  throw lastError || new Error('Failed after multiple retries');
 }
 
 /**

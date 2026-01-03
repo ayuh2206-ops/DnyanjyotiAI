@@ -16,8 +16,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`Chat request: mode=${mode}, subject=${subject}, message=${message.substring(0, 50)}...`);
-
     let response;
     
     if (mode === 'socratic') {
@@ -25,8 +23,6 @@ export async function POST(request: NextRequest) {
     } else {
       response = await directAnswer(message, subject);
     }
-
-    console.log('Chat response generated successfully');
 
     return NextResponse.json({
       success: true,
@@ -39,18 +35,20 @@ export async function POST(request: NextRequest) {
     
     // Provide specific error messages
     let errorMessage = 'Failed to generate response. Please try again.';
+    let statusCode = 500;
     
     if (error.message?.includes('GEMINI_API_KEY') || error.message?.includes('not configured')) {
       errorMessage = 'AI service not configured. Admin needs to add GEMINI_API_KEY in Vercel settings.';
+    } else if (error.message?.includes('Rate limit') || error.message?.includes('429') || error.message?.includes('quota')) {
+      errorMessage = 'AI is busy right now. Please wait 30 seconds and try again.';
+      statusCode = 429;
     } else if (error.message?.includes('API key')) {
       errorMessage = 'Invalid API key. Please check GEMINI_API_KEY configuration.';
-    } else if (error.message?.includes('quota') || error.message?.includes('rate')) {
-      errorMessage = 'API rate limit exceeded. Please try again in a few minutes.';
     }
     
     return NextResponse.json(
-      { error: errorMessage, success: false, details: error.message },
-      { status: 500 }
+      { error: errorMessage, success: false },
+      { status: statusCode }
     );
   }
 }
