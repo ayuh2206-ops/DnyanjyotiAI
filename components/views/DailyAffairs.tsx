@@ -114,7 +114,7 @@ export const DailyAffairs: React.FC = () => {
   const fetchArticles = async () => {
     try {
       setLoading(true);
-      const newsArticles = await getNewsArticles(true, 50);
+      const newsArticles = await getNewsArticles({ isPublished: true, limitCount: 50 });
       
       if (newsArticles.length > 0) {
         // Convert database articles to display format
