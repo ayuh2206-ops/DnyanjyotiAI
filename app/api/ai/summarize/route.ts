@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { summarizeForUPSC } from '@/lib/gemini';
+import { summarizeForUPSC } from '@/lib/groq';
 
 export async function POST(request: NextRequest) {
   try {

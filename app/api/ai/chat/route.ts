@@ -2,7 +2,7 @@
 // POST /api/ai/chat
 
 import { NextRequest, NextResponse } from 'next/server';
-import { socraticChat, directAnswer } from '@/lib/gemini';
+import { socraticChat, directAnswer } from '@/lib/groq';
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,13 +37,13 @@ export async function POST(request: NextRequest) {
     let errorMessage = 'Failed to generate response. Please try again.';
     let statusCode = 500;
     
-    if (error.message?.includes('GEMINI_API_KEY') || error.message?.includes('not configured')) {
-      errorMessage = 'AI service not configured. Admin needs to add GEMINI_API_KEY in Vercel settings.';
-    } else if (error.message?.includes('Rate limit') || error.message?.includes('429') || error.message?.includes('quota')) {
-      errorMessage = 'AI is busy right now. Please wait 30 seconds and try again.';
+    if (error.message?.includes('GROQ_API_KEY') || error.message?.includes('not configured')) {
+      errorMessage = 'AI service not configured. Admin needs to add GROQ_API_KEY in Vercel settings.';
+    } else if (error.message?.includes('busy') || error.message?.includes('429')) {
+      errorMessage = 'AI is busy right now. Please wait a moment and try again.';
       statusCode = 429;
-    } else if (error.message?.includes('API key')) {
-      errorMessage = 'Invalid API key. Please check GEMINI_API_KEY configuration.';
+    } else if (error.message?.includes('API key') || error.message?.includes('401')) {
+      errorMessage = 'Invalid API key. Please check GROQ_API_KEY configuration.';
     }
     
     return NextResponse.json(

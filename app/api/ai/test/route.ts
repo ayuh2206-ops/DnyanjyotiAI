@@ -1,51 +1,54 @@
-// API Test Endpoint - Check Gemini API configuration
+// API Test Endpoint - Check Groq API configuration
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
-  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
   
   const results: any = {
     timestamp: new Date().toISOString(),
-    apiKeyPresent: !!GEMINI_API_KEY,
-    apiKeyLength: GEMINI_API_KEY?.length || 0,
-    apiKeyPrefix: GEMINI_API_KEY?.substring(0, 10) + '...' || 'NOT SET',
+    provider: 'Groq',
+    apiKeyPresent: !!GROQ_API_KEY,
+    apiKeyLength: GROQ_API_KEY?.length || 0,
+    apiKeyPrefix: GROQ_API_KEY?.substring(0, 10) + '...' || 'NOT SET',
     models: {},
   };
 
-  if (!GEMINI_API_KEY) {
+  if (!GROQ_API_KEY) {
     return NextResponse.json({
       ...results,
-      error: 'GEMINI_API_KEY is not set in environment variables',
-      fix: 'Go to Vercel Dashboard → Settings → Environment Variables → Add GEMINI_API_KEY'
+      error: 'GROQ_API_KEY is not set in environment variables',
+      fix: 'Go to Vercel Dashboard → Settings → Environment Variables → Add GROQ_API_KEY',
+      getKey: 'Get your free API key from https://console.groq.com/keys'
     });
   }
 
-  // Test different models - ordered by compatibility
+  // Test Groq models
   const modelsToTest = [
-    'gemini-pro',           // Most compatible with Google Cloud keys
-    'gemini-1.0-pro-latest',
-    'gemini-1.0-pro-001',
-    'gemini-1.5-flash',     // Only works with AI Studio keys
-    'gemini-1.5-pro',       // Only works with AI Studio keys
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant',
+    'llama3-70b-8192',
+    'mixtral-8x7b-32768',
   ];
 
   for (const model of modelsToTest) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-      
-      const response = await fetch(url, {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: 'Say "Hello" in one word' }] }],
-          generationConfig: { maxOutputTokens: 10 },
+          model: model,
+          messages: [{ role: 'user', content: 'Say "Hello" in one word' }],
+          max_tokens: 10,
         }),
       });
 
       const data = await response.json();
       
       if (response.ok) {
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const text = data.choices?.[0]?.message?.content || '';
         results.models[model] = { 
           status: 'SUCCESS', 
           response: text.substring(0, 50),
@@ -56,7 +59,6 @@ export async function GET(request: NextRequest) {
           status: 'FAILED', 
           error: data.error?.message || response.statusText,
           httpStatus: response.status,
-          code: data.error?.code
         };
       }
     } catch (error: any) {
@@ -67,7 +69,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Determine overall status and recommendation
+  // Determine overall status
   const workingModels = Object.entries(results.models)
     .filter(([_, v]: any) => v.status === 'SUCCESS')
     .map(([k]) => k);
@@ -75,25 +77,21 @@ export async function GET(request: NextRequest) {
   if (workingModels.length > 0) {
     results.overallStatus = 'WORKING';
     results.workingModels = workingModels;
-    results.recommendation = `Your API key works! Using model: ${workingModels[0]}`;
+    results.recommendation = `Your Groq API key works! Using model: ${workingModels[0]}`;
   } else {
     results.overallStatus = 'ALL_FAILED';
     
-    // Check specific error patterns
     const allErrors = Object.values(results.models).map((m: any) => m.error || '').join(' ');
     
-    if (allErrors.includes('API key not valid')) {
+    if (allErrors.includes('Invalid API Key') || allErrors.includes('401')) {
       results.issue = 'Invalid API key';
-      results.recommendation = 'Your API key is invalid. Get a new one from https://aistudio.google.com/app/apikey';
-    } else if (allErrors.includes('not found')) {
-      results.issue = 'Models not available for this API key type';
-      results.recommendation = 'Your Google Cloud API key cannot access Gemini models. Get a key from https://aistudio.google.com/app/apikey instead';
-    } else if (allErrors.includes('quota') || allErrors.includes('rate')) {
-      results.issue = 'Quota exhausted';
-      results.recommendation = 'Wait a few minutes or create a new API key in a new project';
+      results.recommendation = 'Your API key is invalid. Get a new one from https://console.groq.com/keys';
+    } else if (allErrors.includes('rate') || allErrors.includes('429')) {
+      results.issue = 'Rate limit exceeded';
+      results.recommendation = 'Wait a minute and try again';
     } else {
       results.issue = 'Unknown error';
-      results.recommendation = 'Create a fresh API key from https://aistudio.google.com/app/apikey';
+      results.recommendation = 'Check your API key at https://console.groq.com/keys';
     }
   }
 
