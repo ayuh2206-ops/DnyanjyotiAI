@@ -740,7 +740,9 @@ export const FacultyDashboard: React.FC = () => {
                       variant="ghost" 
                       icon="delete"
                       onClick={() => article.id && handleDeleteArticle(article.id)}
-                    />
+                    >
+                      Delete
+                    </Button>
                   </div>
                 ))}
               </div>
