@@ -23,9 +23,9 @@ Provide an explanation that:
 
 Keep the explanation under 200 words but ensure it's comprehensive and helpful.`;
 
-    const explanation = await generateContent(prompt, 'smart');
+    const response = await generateContent(prompt, { mode: 'smart' });
 
-    return NextResponse.json({ explanation });
+    return NextResponse.json({ explanation: response.text });
 
   } catch (error: any) {
     console.error('Explanation generation error:', error);

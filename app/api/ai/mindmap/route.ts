@@ -42,16 +42,16 @@ Requirements:
 
 Generate the mind map structure now:`;
 
-    const response = await generateContent(prompt, 'smart');
+    const response = await generateContent(prompt, { mode: 'smart' });
 
     // Parse the response to extract JSON
     let mindMapData;
     try {
       // Try to parse directly
-      mindMapData = JSON.parse(response);
+      mindMapData = JSON.parse(response.text);
     } catch {
       // Try to extract JSON from response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      const jsonMatch = response.text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         mindMapData = JSON.parse(jsonMatch[0]);
       } else {
