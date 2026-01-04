@@ -3,15 +3,21 @@
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// Model configurations - using latest Gemini models
+// Model configurations - ordered by availability (most available first)
 const MODELS = {
+  // Most widely available models
+  basic: {
+    name: 'gemini-pro',  // Original model - always available
+    temperature: 0.7,
+    maxTokens: 2048,
+  },
   flash: {
-    name: 'gemini-2.0-flash',  // Latest stable flash model
+    name: 'gemini-1.5-flash',  // Fast model
     temperature: 0.7,
     maxTokens: 2048,
   },
   pro: {
-    name: 'gemini-2.5-pro-preview-05-06',  // Latest 2.5 pro preview
+    name: 'gemini-1.5-pro',  // Better quality
     temperature: 0.9,
     maxTokens: 4096,
   },
@@ -36,10 +42,55 @@ interface GeminiResponse {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * Generate content using Gemini AI with retry logic
- * @param prompt - User prompt
- * @param options - Generation options
- * @returns Generated text and metadata
+ * Try to call a specific model
+ */
+async function tryModel(
+  modelName: string,
+  prompt: string,
+  config: { temperature: number; maxTokens: number }
+): Promise<{ success: boolean; data?: any; error?: string; isRateLimit?: boolean; status?: number }> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
+
+  const requestBody = {
+    contents: [{
+      parts: [{ text: prompt }],
+    }],
+    generationConfig: {
+      temperature: config.temperature,
+      maxOutputTokens: config.maxTokens,
+    },
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      const errorMessage = responseData.error?.message || response.statusText;
+      const isRateLimit = response.status === 429 || 
+        errorMessage.toLowerCase().includes('rate') || 
+        errorMessage.toLowerCase().includes('quota') ||
+        errorMessage.toLowerCase().includes('resource') ||
+        errorMessage.toLowerCase().includes('exhausted');
+      
+      console.error(`Model ${modelName} failed:`, errorMessage);
+      return { success: false, error: errorMessage, isRateLimit, status: response.status };
+    }
+
+    return { success: true, data: responseData, status: response.status };
+  } catch (error: any) {
+    console.error(`Model ${modelName} exception:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Generate content using Gemini AI with model fallback
  */
 export async function generateContent(
   prompt: string,
@@ -47,8 +98,8 @@ export async function generateContent(
 ): Promise<GeminiResponse> {
   // Check for API key
   if (!GEMINI_API_KEY) {
-    console.error('GEMINI_API_KEY is not set in environment variables');
-    throw new Error('AI service not configured. Please set GEMINI_API_KEY in Vercel environment variables.');
+    console.error('GEMINI_API_KEY is not set');
+    throw new Error('AI service not configured. Please add GEMINI_API_KEY in Vercel Settings → Environment Variables.');
   }
 
   const {
@@ -58,86 +109,61 @@ export async function generateContent(
     systemPrompt,
   } = options;
 
-  const modelConfig = mode === 'smart' ? MODELS.pro : MODELS.flash;
-  const modelName = modelConfig.name;
+  const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+  
+  // Try models in order of availability
+  // gemini-pro is the most widely available and stable
+  const modelsToTry = [
+    MODELS.basic,   // gemini-pro - always available
+    MODELS.flash,   // gemini-1.5-flash - usually available
+    MODELS.pro,     // gemini-1.5-pro - might have stricter limits
+  ];
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
+  let lastError = '';
+  let allRateLimited = true;
 
-  const requestBody: any = {
-    contents: [{
-      parts: [{
-        text: systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt,
-      }],
-    }],
-    generationConfig: {
-      temperature: temperature ?? modelConfig.temperature,
-      maxOutputTokens: maxTokens ?? modelConfig.maxTokens,
-    },
-  };
+  for (const model of modelsToTry) {
+    console.log(`Attempting model: ${model.name}`);
+    
+    const result = await tryModel(model.name, fullPrompt, {
+      temperature: temperature ?? model.temperature,
+      maxTokens: maxTokens ?? model.maxTokens,
+    });
 
-  // Retry logic with exponential backoff
-  const maxRetries = 3;
-  let lastError: Error | null = null;
+    if (result.success && result.data) {
+      const text = result.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const tokensUsed = result.data.usageMetadata?.totalTokenCount || 0;
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      if (attempt > 0) {
-        // Wait before retry: 2s, 4s, 8s
-        const waitTime = Math.pow(2, attempt) * 1000;
-        console.log(`Retry attempt ${attempt + 1}, waiting ${waitTime}ms...`);
-        await delay(waitTime);
-      }
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        const errorMessage = responseData.error?.message || response.statusText;
-        
-        // Check if it's a rate limit error (429) - retry
-        if (response.status === 429 || errorMessage.toLowerCase().includes('rate') || errorMessage.toLowerCase().includes('quota')) {
-          console.warn(`Rate limit hit, attempt ${attempt + 1}/${maxRetries}`);
-          lastError = new Error(`Rate limit exceeded`);
-          continue; // Try again
-        }
-        
-        // For other errors, throw immediately
-        console.error('Gemini API error response:', JSON.stringify(responseData, null, 2));
-        throw new Error(`Gemini API error: ${errorMessage}`);
-      }
-
-      const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const tokensUsed = responseData.usageMetadata?.totalTokenCount || 0;
-
-      if (!text) {
-        console.error('Empty response from Gemini:', JSON.stringify(responseData, null, 2));
-        throw new Error('Empty response from Gemini API');
-      }
-
-      return {
-        text,
-        tokensUsed,
-        model: modelName,
-      };
-    } catch (error: any) {
-      lastError = error;
-      
-      // If it's not a rate limit error, don't retry
-      if (!error.message?.includes('Rate limit') && !error.message?.includes('429')) {
-        throw error;
+      if (text) {
+        console.log(`Success with model: ${model.name}`);
+        return { text, tokensUsed, model: model.name };
       }
     }
+
+    if (result.error) {
+      lastError = result.error;
+      if (!result.isRateLimit) {
+        allRateLimited = false;
+      }
+    }
+
+    // Small delay between model attempts
+    await delay(500);
   }
 
-  // All retries failed
-  throw lastError || new Error('Failed after multiple retries');
+  // All models failed
+  console.error('All models failed. Last error:', lastError);
+  
+  if (allRateLimited) {
+    throw new Error('AI is busy right now. Please wait 30 seconds and try again.');
+  }
+  
+  // Provide helpful error message
+  if (lastError.includes('API key not valid')) {
+    throw new Error('Invalid API key. Please check GEMINI_API_KEY in Vercel environment variables.');
+  }
+  
+  throw new Error(`AI error: ${lastError}`);
 }
 
 /**
