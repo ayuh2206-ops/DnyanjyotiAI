@@ -232,6 +232,137 @@ export interface StudentProgress {
   subjectScores: Record<string, number>;
 }
 
+// ============== NEW TYPES FOR COMPLETE FEATURES ==============
+
+// Faculty Email Pre-Assignment (VERO assigns faculty by email)
+export interface FacultyAssignment {
+  id?: string;
+  email: string;
+  displayName?: string;
+  specialization: string[];
+  assignedBy: string;
+  assignedByEmail: string;
+  isActivated: boolean;
+  activatedAt?: Date | null;
+  createdAt: Date;
+}
+
+// News Articles for Daily Affairs
+export interface NewsArticle {
+  id?: string;
+  title: string;
+  content: string;
+  summary60Words?: string;
+  source: string;
+  sourceUrl?: string;
+  imageUrl?: string;
+  tags: string[];
+  gsPaper?: string[];
+  readingTime: number;
+  isPublished: boolean;
+  publishedAt?: Date | null;
+  createdBy: string;
+  createdByEmail: string;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+// Editorial Briefs (60-word summaries)
+export interface EditorialBrief {
+  id?: string;
+  articleId?: string;
+  title: string;
+  brief: string;
+  keyTerms: string[];
+  upscRelevance: string;
+  gsPaper: string;
+  relatedTopics: string[];
+  createdBy: string;
+  createdAt: Date;
+}
+
+// Previous Year Questions
+export interface PYQQuestion {
+  id?: string;
+  year: number;
+  paper: 'Prelims' | 'Mains-GS1' | 'Mains-GS2' | 'Mains-GS3' | 'Mains-GS4' | 'Essay';
+  questionNumber: number;
+  question: string;
+  options?: string[];
+  correctAnswer?: string;
+  explanation?: string;
+  subject: string;
+  topic: string;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  marks?: number;
+  createdBy: string;
+  createdAt: Date;
+}
+
+// Syllabus Tracking
+export interface SyllabusItem {
+  id?: string;
+  subject: string;
+  topic: string;
+  subtopics: string[];
+  paper: string;
+  order: number;
+}
+
+export interface SyllabusProgress {
+  id?: string;
+  userId: string;
+  syllabusItemId: string;
+  subject: string;
+  topic: string;
+  status: 'not_started' | 'in_progress' | 'completed' | 'revision';
+  completedAt?: Date | null;
+  lastRevisedAt?: Date | null;
+  notes?: string;
+  updatedAt: Date;
+}
+
+// Flashcards
+export interface Flashcard {
+  id?: string;
+  userId: string;
+  front: string;
+  back: string;
+  topic: string;
+  subject: string;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  nextReviewDate: Date;
+  repetitions: number;
+  easeFactor: number;
+  interval: number;
+  createdAt: Date;
+}
+
+export interface FlashcardDeck {
+  id?: string;
+  userId: string;
+  name: string;
+  description?: string;
+  subject: string;
+  cardCount: number;
+  createdAt: Date;
+}
+
+// Mind Maps
+export interface MindMapNode {
+  name: string;
+  children?: MindMapNode[];
+}
+
+export interface MindMap {
+  id?: string;
+  userId: string;
+  topic: string;
+  subject: string;
+  data: MindMapNode;
+  createdAt: Date;
+}
+
 // ============== USER OPERATIONS ==============
 
 export async function getAllUsers(): Promise<UserProfile[]> {
@@ -1352,6 +1483,672 @@ export function subscribeToUserProfile(
   });
 }
 
+// ============== FACULTY EMAIL ASSIGNMENT ==============
+
+// Check if email is pre-assigned as faculty
+export async function checkFacultyAssignment(email: string): Promise<FacultyAssignment | null> {
+  try {
+    const q = query(
+      collection(db, 'facultyAssignments'),
+      where('email', '==', email.toLowerCase()),
+      limit(1)
+    );
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return null;
+    
+    const docData = snapshot.docs[0];
+    const data = docData.data();
+    return {
+      id: docData.id,
+      ...data,
+      createdAt: data.createdAt?.toDate() || new Date(),
+      activatedAt: data.activatedAt?.toDate() || null,
+    } as FacultyAssignment;
+  } catch (error) {
+    console.error('Error checking faculty assignment:', error);
+    return null;
+  }
+}
+
+// Assign faculty by email (VERO only)
+export async function assignFacultyByEmail(
+  email: string,
+  displayName: string,
+  specialization: string[],
+  assignedBy: string,
+  assignedByEmail: string
+): Promise<string> {
+  try {
+    // Check if already assigned
+    const existing = await checkFacultyAssignment(email);
+    if (existing) {
+      throw new Error('This email is already assigned as faculty');
+    }
+
+    const docRef = await addDoc(collection(db, 'facultyAssignments'), {
+      email: email.toLowerCase(),
+      displayName,
+      specialization,
+      assignedBy,
+      assignedByEmail,
+      isActivated: false,
+      activatedAt: null,
+      createdAt: serverTimestamp(),
+    });
+
+    // Log admin action
+    await addDoc(collection(db, 'adminLogs'), {
+      action: 'ASSIGN_FACULTY_EMAIL',
+      targetUserId: email,
+      details: `Assigned ${email} as faculty with specializations: ${specialization.join(', ')}`,
+      performedBy: assignedBy,
+      performedByEmail: assignedByEmail,
+      createdAt: serverTimestamp(),
+    });
+
+    return docRef.id;
+  } catch (error) {
+    console.error('Error assigning faculty:', error);
+    throw error;
+  }
+}
+
+// Activate faculty assignment (called when user logs in with assigned email)
+export async function activateFacultyAssignment(
+  assignmentId: string,
+  userId: string
+): Promise<void> {
+  try {
+    const assignmentRef = doc(db, 'facultyAssignments', assignmentId);
+    await updateDoc(assignmentRef, {
+      isActivated: true,
+      activatedAt: serverTimestamp(),
+      userId,
+    });
+  } catch (error) {
+    console.error('Error activating faculty assignment:', error);
+    throw error;
+  }
+}
+
+// Get all faculty assignments
+export async function getAllFacultyAssignments(): Promise<FacultyAssignment[]> {
+  try {
+    const q = query(collection(db, 'facultyAssignments'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        activatedAt: data.activatedAt?.toDate() || null,
+      } as FacultyAssignment;
+    });
+  } catch (error) {
+    console.error('Error getting faculty assignments:', error);
+    return [];
+  }
+}
+
+// Remove faculty assignment
+export async function removeFacultyAssignment(
+  assignmentId: string,
+  performedBy: string,
+  performedByEmail: string
+): Promise<void> {
+  try {
+    const assignmentRef = doc(db, 'facultyAssignments', assignmentId);
+    const assignmentDoc = await getDoc(assignmentRef);
+    
+    if (!assignmentDoc.exists()) {
+      throw new Error('Assignment not found');
+    }
+
+    const assignmentData = assignmentDoc.data();
+    await deleteDoc(assignmentRef);
+
+    // If user has been activated, also update their role back to student
+    if (assignmentData.isActivated && assignmentData.userId) {
+      const userRef = doc(db, 'users', assignmentData.userId);
+      await updateDoc(userRef, { role: 'student' });
+    }
+
+    // Log admin action
+    await addDoc(collection(db, 'adminLogs'), {
+      action: 'REMOVE_FACULTY_ASSIGNMENT',
+      targetUserId: assignmentData.email,
+      details: `Removed faculty assignment for ${assignmentData.email}`,
+      performedBy,
+      performedByEmail,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error removing faculty assignment:', error);
+    throw error;
+  }
+}
+
+// ============== NEWS ARTICLES ==============
+
+// Create news article (Faculty only)
+export async function createNewsArticle(
+  article: Omit<NewsArticle, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<string> {
+  try {
+    const docRef = await addDoc(collection(db, 'newsArticles'), {
+      ...article,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating news article:', error);
+    throw error;
+  }
+}
+
+// Get all news articles
+export async function getNewsArticles(
+  filters?: { tags?: string[]; isPublished?: boolean; limitCount?: number }
+): Promise<NewsArticle[]> {
+  try {
+    let q = query(collection(db, 'newsArticles'), orderBy('createdAt', 'desc'));
+    
+    if (filters?.limitCount) {
+      q = query(q, limit(filters.limitCount));
+    }
+
+    const snapshot = await getDocs(q);
+    let articles = snapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || null,
+        publishedAt: data.publishedAt?.toDate() || null,
+      } as NewsArticle;
+    });
+
+    // Client-side filtering for tags and published status
+    if (filters?.isPublished !== undefined) {
+      articles = articles.filter(a => a.isPublished === filters.isPublished);
+    }
+    if (filters?.tags && filters.tags.length > 0) {
+      articles = articles.filter(a => 
+        filters.tags!.some(tag => a.tags.includes(tag))
+      );
+    }
+
+    return articles;
+  } catch (error) {
+    console.error('Error getting news articles:', error);
+    return [];
+  }
+}
+
+// Update news article
+export async function updateNewsArticle(
+  articleId: string,
+  updates: Partial<NewsArticle>
+): Promise<void> {
+  try {
+    const articleRef = doc(db, 'newsArticles', articleId);
+    await updateDoc(articleRef, {
+      ...updates,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error updating news article:', error);
+    throw error;
+  }
+}
+
+// Delete news article
+export async function deleteNewsArticle(articleId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'newsArticles', articleId));
+  } catch (error) {
+    console.error('Error deleting news article:', error);
+    throw error;
+  }
+}
+
+// ============== EDITORIAL BRIEFS ==============
+
+export async function createEditorialBrief(
+  brief: Omit<EditorialBrief, 'id' | 'createdAt'>
+): Promise<string> {
+  try {
+    const docRef = await addDoc(collection(db, 'editorialBriefs'), {
+      ...brief,
+      createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating editorial brief:', error);
+    throw error;
+  }
+}
+
+export async function getEditorialBriefs(limitCount: number = 20): Promise<EditorialBrief[]> {
+  try {
+    const q = query(
+      collection(db, 'editorialBriefs'),
+      orderBy('createdAt', 'desc'),
+      limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+      } as EditorialBrief;
+    });
+  } catch (error) {
+    console.error('Error getting editorial briefs:', error);
+    return [];
+  }
+}
+
+// ============== PREVIOUS YEAR QUESTIONS ==============
+
+export async function createPYQ(
+  question: Omit<PYQQuestion, 'id' | 'createdAt'>
+): Promise<string> {
+  try {
+    const docRef = await addDoc(collection(db, 'pyqQuestions'), {
+      ...question,
+      createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating PYQ:', error);
+    throw error;
+  }
+}
+
+export async function getPYQs(filters?: { year?: number; subject?: string; paper?: string }): Promise<PYQQuestion[]> {
+  try {
+    let q = query(collection(db, 'pyqQuestions'), orderBy('year', 'desc'));
+    
+    const snapshot = await getDocs(q);
+    let questions = snapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+      } as PYQQuestion;
+    });
+
+    if (filters?.year) {
+      questions = questions.filter(q => q.year === filters.year);
+    }
+    if (filters?.subject) {
+      questions = questions.filter(q => q.subject === filters.subject);
+    }
+    if (filters?.paper) {
+      questions = questions.filter(q => q.paper === filters.paper);
+    }
+
+    return questions;
+  } catch (error) {
+    console.error('Error getting PYQs:', error);
+    return [];
+  }
+}
+
+export async function getAllPYQYears(): Promise<number[]> {
+  try {
+    const snapshot = await getDocs(collection(db, 'pyqQuestions'));
+    const years = new Set<number>();
+    snapshot.docs.forEach(docSnap => {
+      const year = docSnap.data().year;
+      if (year) years.add(year);
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  } catch (error) {
+    console.error('Error getting PYQ years:', error);
+    return [];
+  }
+}
+
+// ============== SYLLABUS TRACKING ==============
+
+export async function initializeSyllabus(): Promise<void> {
+  // Default UPSC syllabus structure
+  const defaultSyllabus: Omit<SyllabusItem, 'id'>[] = [
+    { subject: 'Polity', topic: 'Constitution - Historical Background', subtopics: ['Government of India Acts', 'Making of Constitution'], paper: 'GS2', order: 1 },
+    { subject: 'Polity', topic: 'Preamble', subtopics: ['Philosophy', 'Amendment'], paper: 'GS2', order: 2 },
+    { subject: 'Polity', topic: 'Fundamental Rights', subtopics: ['Articles 12-35', 'Writs', 'Limitations'], paper: 'GS2', order: 3 },
+    { subject: 'Polity', topic: 'DPSP & FD', subtopics: ['Articles 36-51', 'Fundamental Duties'], paper: 'GS2', order: 4 },
+    { subject: 'Polity', topic: 'Union Executive', subtopics: ['President', 'PM & Council', 'CAG'], paper: 'GS2', order: 5 },
+    { subject: 'History', topic: 'Ancient India', subtopics: ['Indus Valley', 'Vedic Period', 'Mauryas', 'Guptas'], paper: 'GS1', order: 6 },
+    { subject: 'History', topic: 'Medieval India', subtopics: ['Delhi Sultanate', 'Mughal Empire', 'Bhakti Movement'], paper: 'GS1', order: 7 },
+    { subject: 'History', topic: 'Modern India', subtopics: ['British Rule', 'Freedom Struggle', 'Social Reforms'], paper: 'GS1', order: 8 },
+    { subject: 'Geography', topic: 'Physical Geography', subtopics: ['Geomorphology', 'Climatology', 'Oceanography'], paper: 'GS1', order: 9 },
+    { subject: 'Geography', topic: 'Indian Geography', subtopics: ['Physiography', 'Climate', 'Rivers', 'Agriculture'], paper: 'GS1', order: 10 },
+    { subject: 'Economy', topic: 'Basic Concepts', subtopics: ['National Income', 'GDP', 'Inflation'], paper: 'GS3', order: 11 },
+    { subject: 'Economy', topic: 'Indian Economy', subtopics: ['Planning', 'Sectors', 'Reforms'], paper: 'GS3', order: 12 },
+    { subject: 'Environment', topic: 'Ecology', subtopics: ['Ecosystems', 'Biodiversity', 'Conservation'], paper: 'GS3', order: 13 },
+    { subject: 'Environment', topic: 'Climate Change', subtopics: ['Global Warming', 'International Agreements'], paper: 'GS3', order: 14 },
+    { subject: 'Science', topic: 'Physics', subtopics: ['Mechanics', 'Optics', 'Modern Physics'], paper: 'GS3', order: 15 },
+    { subject: 'Science', topic: 'Chemistry', subtopics: ['Organic', 'Inorganic', 'Applications'], paper: 'GS3', order: 16 },
+    { subject: 'Science', topic: 'Biology', subtopics: ['Botany', 'Zoology', 'Human Body'], paper: 'GS3', order: 17 },
+    { subject: 'Ethics', topic: 'Ethics in Governance', subtopics: ['Attitude', 'Aptitude', 'Emotional Intelligence'], paper: 'GS4', order: 18 },
+  ];
+
+  try {
+    const snapshot = await getDocs(collection(db, 'syllabus'));
+    if (snapshot.empty) {
+      const batch = writeBatch(db);
+      defaultSyllabus.forEach(item => {
+        const docRef = doc(collection(db, 'syllabus'));
+        batch.set(docRef, item);
+      });
+      await batch.commit();
+    }
+  } catch (error) {
+    console.error('Error initializing syllabus:', error);
+  }
+}
+
+export async function getSyllabusItems(): Promise<SyllabusItem[]> {
+  try {
+    const q = query(collection(db, 'syllabus'), orderBy('order', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docSnap => ({
+      id: docSnap.id,
+      ...docSnap.data(),
+    } as SyllabusItem));
+  } catch (error) {
+    console.error('Error getting syllabus:', error);
+    return [];
+  }
+}
+
+export async function getUserSyllabusProgress(userId: string): Promise<SyllabusProgress[]> {
+  try {
+    const q = query(
+      collection(db, 'syllabusProgress'),
+      where('userId', '==', userId)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        completedAt: data.completedAt?.toDate() || null,
+        lastRevisedAt: data.lastRevisedAt?.toDate() || null,
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+      } as SyllabusProgress;
+    });
+  } catch (error) {
+    console.error('Error getting syllabus progress:', error);
+    return [];
+  }
+}
+
+export async function updateSyllabusProgress(
+  userId: string,
+  syllabusItemId: string,
+  subject: string,
+  topic: string,
+  status: SyllabusProgress['status'],
+  notes?: string
+): Promise<void> {
+  try {
+    // Check if progress exists
+    const q = query(
+      collection(db, 'syllabusProgress'),
+      where('userId', '==', userId),
+      where('syllabusItemId', '==', syllabusItemId)
+    );
+    const snapshot = await getDocs(q);
+
+    const updates: any = {
+      status,
+      updatedAt: serverTimestamp(),
+    };
+
+    if (notes) updates.notes = notes;
+    if (status === 'completed') updates.completedAt = serverTimestamp();
+    if (status === 'revision') updates.lastRevisedAt = serverTimestamp();
+
+    if (snapshot.empty) {
+      // Create new progress
+      await addDoc(collection(db, 'syllabusProgress'), {
+        userId,
+        syllabusItemId,
+        subject,
+        topic,
+        ...updates,
+      });
+    } else {
+      // Update existing
+      const docRef = doc(db, 'syllabusProgress', snapshot.docs[0].id);
+      await updateDoc(docRef, updates);
+    }
+  } catch (error) {
+    console.error('Error updating syllabus progress:', error);
+    throw error;
+  }
+}
+
+// ============== FLASHCARDS ==============
+
+export async function createFlashcard(
+  flashcard: Omit<Flashcard, 'id' | 'createdAt'>
+): Promise<string> {
+  try {
+    const docRef = await addDoc(collection(db, 'flashcards'), {
+      ...flashcard,
+      createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating flashcard:', error);
+    throw error;
+  }
+}
+
+export async function getUserFlashcards(userId: string): Promise<Flashcard[]> {
+  try {
+    const q = query(
+      collection(db, 'flashcards'),
+      where('userId', '==', userId),
+      orderBy('nextReviewDate', 'asc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        nextReviewDate: data.nextReviewDate?.toDate() || new Date(),
+        createdAt: data.createdAt?.toDate() || new Date(),
+      } as Flashcard;
+    });
+  } catch (error) {
+    console.error('Error getting flashcards:', error);
+    return [];
+  }
+}
+
+export async function updateFlashcardReview(
+  flashcardId: string,
+  quality: number // 0-5 rating of how well user remembered
+): Promise<void> {
+  try {
+    const flashcardRef = doc(db, 'flashcards', flashcardId);
+    const flashcardDoc = await getDoc(flashcardRef);
+    
+    if (!flashcardDoc.exists()) throw new Error('Flashcard not found');
+
+    const data = flashcardDoc.data();
+    let { easeFactor, interval, repetitions } = data;
+
+    // SM-2 algorithm for spaced repetition
+    if (quality >= 3) {
+      if (repetitions === 0) {
+        interval = 1;
+      } else if (repetitions === 1) {
+        interval = 6;
+      } else {
+        interval = Math.round(interval * easeFactor);
+      }
+      repetitions += 1;
+    } else {
+      repetitions = 0;
+      interval = 1;
+    }
+
+    easeFactor = Math.max(1.3, easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+
+    const nextReviewDate = new Date();
+    nextReviewDate.setDate(nextReviewDate.getDate() + interval);
+
+    await updateDoc(flashcardRef, {
+      easeFactor,
+      interval,
+      repetitions,
+      nextReviewDate: Timestamp.fromDate(nextReviewDate),
+    });
+  } catch (error) {
+    console.error('Error updating flashcard review:', error);
+    throw error;
+  }
+}
+
+export async function deleteFlashcard(flashcardId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'flashcards', flashcardId));
+  } catch (error) {
+    console.error('Error deleting flashcard:', error);
+    throw error;
+  }
+}
+
+// ============== MIND MAPS ==============
+
+export async function saveMindMap(
+  userId: string,
+  topic: string,
+  subject: string,
+  data: MindMapNode
+): Promise<string> {
+  try {
+    const docRef = await addDoc(collection(db, 'mindMaps'), {
+      userId,
+      topic,
+      subject,
+      data,
+      createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error saving mind map:', error);
+    throw error;
+  }
+}
+
+export async function getUserMindMaps(userId: string): Promise<MindMap[]> {
+  try {
+    const q = query(
+      collection(db, 'mindMaps'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+      } as MindMap;
+    });
+  } catch (error) {
+    console.error('Error getting mind maps:', error);
+    return [];
+  }
+}
+
+// ============== BOOKMARKS ==============
+
+export async function bookmarkArticle(
+  userId: string,
+  articleId: string,
+  articleType: 'news' | 'editorial' | 'pyq'
+): Promise<void> {
+  try {
+    await addDoc(collection(db, 'bookmarks'), {
+      userId,
+      articleId,
+      articleType,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error bookmarking article:', error);
+    throw error;
+  }
+}
+
+export async function getUserBookmarks(
+  userId: string,
+  articleType?: string
+): Promise<{ articleId: string; articleType: string; createdAt: Date }[]> {
+  try {
+    const q = query(
+      collection(db, 'bookmarks'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+
+    const snapshot = await getDocs(q);
+    let bookmarks = snapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        articleId: data.articleId,
+        articleType: data.articleType,
+        createdAt: data.createdAt?.toDate() || new Date(),
+      };
+    });
+
+    if (articleType) {
+      bookmarks = bookmarks.filter(b => b.articleType === articleType);
+    }
+
+    return bookmarks;
+  } catch (error) {
+    console.error('Error getting bookmarks:', error);
+    return [];
+  }
+}
+
+export async function removeBookmark(userId: string, articleId: string): Promise<void> {
+  try {
+    const q = query(
+      collection(db, 'bookmarks'),
+      where('userId', '==', userId),
+      where('articleId', '==', articleId)
+    );
+    const snapshot = await getDocs(q);
+    
+    const batchOp = writeBatch(db);
+    snapshot.docs.forEach(docSnap => batchOp.delete(docSnap.ref));
+    await batchOp.commit();
+  } catch (error) {
+    console.error('Error removing bookmark:', error);
+    throw error;
+  }
+}
+
 export default {
   // Users
   getAllUsers,
@@ -1382,6 +2179,12 @@ export default {
   getAllFaculties,
   updateFaculty,
   deleteFaculty,
+  // Faculty Assignment
+  checkFacultyAssignment,
+  assignFacultyByEmail,
+  activateFacultyAssignment,
+  getAllFacultyAssignments,
+  removeFacultyAssignment,
   // Batch
   createBatch,
   getBatch,
@@ -1406,6 +2209,34 @@ export default {
   setUserRole,
   addTokensToUser,
   getAdminLogs,
+  // News & Content
+  createNewsArticle,
+  getNewsArticles,
+  updateNewsArticle,
+  deleteNewsArticle,
+  createEditorialBrief,
+  getEditorialBriefs,
+  // PYQ
+  createPYQ,
+  getPYQs,
+  getAllPYQYears,
+  // Syllabus
+  initializeSyllabus,
+  getSyllabusItems,
+  getUserSyllabusProgress,
+  updateSyllabusProgress,
+  // Flashcards
+  createFlashcard,
+  getUserFlashcards,
+  updateFlashcardReview,
+  deleteFlashcard,
+  // Mind Maps
+  saveMindMap,
+  getUserMindMaps,
+  // Bookmarks
+  bookmarkArticle,
+  getUserBookmarks,
+  removeBookmark,
   // Realtime
   subscribeToUserProfile,
 };

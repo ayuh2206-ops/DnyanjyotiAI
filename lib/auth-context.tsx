@@ -11,7 +11,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp, updateDoc, increment } from 'firebase/firestore';
 import { auth, db, googleProvider, VERO_EMAIL } from './firebase';
-import { UserRole, PaymentStatus, PlanType } from './db';
+import { UserRole, PaymentStatus, PlanType, checkFacultyAssignment, activateFacultyAssignment, createFaculty } from './db';
 
 // User profile stored in Firestore
 export interface UserProfile {
@@ -134,38 +134,164 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const userRef = doc(db, 'users', firebaseUser.uid);
       const userSnap = await getDoc(userRef);
+      const isVero = isVeroAdmin(firebaseUser.email);
+
+      // Check if this email is pre-assigned as faculty
+      let facultyAssignment = null;
+      if (!isVero && firebaseUser.email) {
+        facultyAssignment = await checkFacultyAssignment(firebaseUser.email);
+      }
 
       if (userSnap.exists()) {
-        // Update last login and check if VERO status changed
-        const isVero = isVeroAdmin(firebaseUser.email);
-        await updateDoc(userRef, {
+        // Existing user - update last login
+        const data = userSnap.data();
+        const currentRole = data.role;
+        
+        // Determine the role (priority: vero > faculty assignment > existing role)
+        let newRole: UserRole = currentRole || 'student';
+        if (isVero) {
+          newRole = 'vero';
+        } else if (facultyAssignment && !facultyAssignment.isActivated) {
+          // This user has been assigned as faculty but hasn't activated yet
+          newRole = 'faculty';
+        }
+
+        const updates: any = {
           lastLoginAt: serverTimestamp(),
           isAdmin: isVero,
-          // Auto-upgrade to vero role if email matches
-          ...(isVero && { role: 'vero', plan: 'Lifetime', lifetimeAccess: true, paymentStatus: 'lifetime' }),
-        });
+        };
+
+        // Auto-upgrade to vero role if email matches
+        if (isVero) {
+          updates.role = 'vero';
+          updates.plan = 'Lifetime';
+          updates.lifetimeAccess = true;
+          updates.paymentStatus = 'lifetime';
+        }
         
-        const data = userSnap.data();
+        // Auto-upgrade to faculty role if pre-assigned
+        if (facultyAssignment && !facultyAssignment.isActivated && currentRole !== 'faculty') {
+          updates.role = 'faculty';
+          updates.plan = 'Lifetime';
+          updates.lifetimeAccess = true;
+          updates.paymentStatus = 'lifetime';
+          updates.tokens = 999999;
+          
+          // Activate the faculty assignment
+          await activateFacultyAssignment(facultyAssignment.id!, firebaseUser.uid);
+          
+          // Create faculty record
+          await createFaculty({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            displayName: firebaseUser.displayName || facultyAssignment.displayName || 'Faculty',
+            photoURL: firebaseUser.photoURL,
+            specialization: facultyAssignment.specialization || [],
+            batchIds: [],
+            totalStudents: 0,
+            isActive: true,
+            createdAt: new Date(),
+            createdBy: facultyAssignment.assignedBy,
+          });
+        }
+
+        await updateDoc(userRef, updates);
+        
         return {
           ...data,
           uid: firebaseUser.uid,
           isAdmin: isVero || data.isAdmin,
-          role: isVero ? 'vero' : (data.role || 'student'),
+          role: updates.role || newRole,
+          plan: updates.plan || data.plan,
+          lifetimeAccess: updates.lifetimeAccess ?? data.lifetimeAccess,
+          paymentStatus: updates.paymentStatus || data.paymentStatus,
+          tokens: updates.tokens ?? data.tokens,
           createdAt: data.createdAt?.toDate() || new Date(),
           lastLoginAt: new Date(),
           paymentExpiry: data.paymentExpiry?.toDate() || null,
         } as UserProfile;
       } else {
-        // Create new profile
-        const defaultProfile = createDefaultProfile(firebaseUser);
+        // New user - create profile
+        let role: UserRole = 'student';
+        let plan: PlanType = 'Free';
+        let tokens = 500;
+        let lifetimeAccess = false;
+        let paymentStatus: PaymentStatus = 'none';
+
+        if (isVero) {
+          role = 'vero';
+          plan = 'Lifetime';
+          tokens = 999999;
+          lifetimeAccess = true;
+          paymentStatus = 'lifetime';
+        } else if (facultyAssignment) {
+          // New user with faculty pre-assignment
+          role = 'faculty';
+          plan = 'Lifetime';
+          tokens = 999999;
+          lifetimeAccess = true;
+          paymentStatus = 'lifetime';
+          
+          // Activate the faculty assignment
+          await activateFacultyAssignment(facultyAssignment.id!, firebaseUser.uid);
+          
+          // Create faculty record
+          await createFaculty({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            displayName: firebaseUser.displayName || facultyAssignment.displayName || 'Faculty',
+            photoURL: firebaseUser.photoURL,
+            specialization: facultyAssignment.specialization || [],
+            batchIds: [],
+            totalStudents: 0,
+            isActive: true,
+            createdAt: new Date(),
+            createdBy: facultyAssignment.assignedBy,
+          });
+        }
+
+        const newProfile = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email || '',
+          displayName: firebaseUser.displayName || 'UPSC Aspirant',
+          photoURL: firebaseUser.photoURL,
+          role,
+          plan,
+          tokens,
+          streak: 0,
+          longestStreak: 0,
+          efficiency: 0,
+          targetExam: 'UPSC CSE 2025',
+          isAdmin: isVero,
+          paymentStatus,
+          paymentExpiry: null,
+          lifetimeAccess,
+          batchId: null,
+          batchName: null,
+          facultyId: null,
+          testsCompleted: 0,
+          totalStudyTime: 0,
+          averageScore: 0,
+          subjects: {
+            polity: 50,
+            history: 50,
+            geography: 50,
+            economy: 50,
+            environment: 50,
+            science: 50,
+            currentAffairs: 50,
+            ethics: 50,
+          },
+        };
+
         await setDoc(userRef, {
-          ...defaultProfile,
+          ...newProfile,
           createdAt: serverTimestamp(),
           lastLoginAt: serverTimestamp(),
         });
         
         return {
-          ...defaultProfile,
+          ...newProfile,
           createdAt: new Date(),
           lastLoginAt: new Date(),
         };

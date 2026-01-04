@@ -13,14 +13,21 @@ import {
   removeStudentFromBatch,
   getStudentProgress,
   getAllUsers,
+  createNewsArticle,
+  getNewsArticles,
+  updateNewsArticle,
+  deleteNewsArticle,
+  createEditorialBrief,
+  createPYQ,
   Faculty,
   Batch,
   UserProfile,
   StudentProgress,
+  NewsArticle,
 } from '@/lib/db';
 import { GlassCard, Button, Badge, Input, Modal, Avatar, LoadingSpinner, Toast, ProgressBar } from '../UI';
 
-type TabType = 'overview' | 'batches' | 'students' | 'analytics';
+type TabType = 'overview' | 'batches' | 'students' | 'content' | 'analytics';
 
 export const FacultyDashboard: React.FC = () => {
   const { userProfile } = useAuth();
@@ -36,11 +43,14 @@ export const FacultyDashboard: React.FC = () => {
   const [allStudents, setAllStudents] = useState<UserProfile[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<UserProfile | null>(null);
   const [studentProgress, setStudentProgress] = useState<StudentProgress | null>(null);
+  const [articles, setArticles] = useState<NewsArticle[]>([]);
   
   // Modal state
   const [showCreateBatchModal, setShowCreateBatchModal] = useState(false);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [showStudentDetailModal, setShowStudentDetailModal] = useState(false);
+  const [showCreateArticleModal, setShowCreateArticleModal] = useState(false);
+  const [showCreatePYQModal, setShowCreatePYQModal] = useState(false);
   
   // Form state
   const [newBatch, setNewBatch] = useState({
@@ -50,6 +60,32 @@ export const FacultyDashboard: React.FC = () => {
     maxStudents: 50,
   });
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Article form state
+  const [newArticle, setNewArticle] = useState({
+    title: '',
+    content: '',
+    summary60Words: '',
+    source: 'The Hindu',
+    sourceUrl: '',
+    imageUrl: '',
+    tags: [] as string[],
+    gsPaper: [] as string[],
+  });
+  
+  // PYQ form state
+  const [newPYQ, setNewPYQ] = useState({
+    year: new Date().getFullYear() - 1,
+    paper: 'Prelims' as const,
+    questionNumber: 1,
+    question: '',
+    options: ['', '', '', ''],
+    correctAnswer: '',
+    explanation: '',
+    subject: '',
+    topic: '',
+    difficulty: 'Medium' as const,
+  });
 
   useEffect(() => {
     if (userProfile?.uid) {
@@ -62,21 +98,114 @@ export const FacultyDashboard: React.FC = () => {
     
     try {
       setLoading(true);
-      const [facultyData, batchesData, studentsData] = await Promise.all([
+      const [facultyData, batchesData, studentsData, articlesData] = await Promise.all([
         getFaculty(userProfile.uid),
         getBatchesByFaculty(userProfile.uid),
         getAllUsers(),
+        getNewsArticles({ limitCount: 50 }),
       ]);
       
       setFaculty(facultyData);
       setBatches(batchesData);
       // Filter only students without batch or for adding
       setAllStudents(studentsData.filter(s => s.role === 'student' || !s.role));
+      // Filter articles created by this faculty
+      setArticles(articlesData.filter(a => a.createdBy === userProfile.uid));
     } catch (error) {
       console.error('Error fetching faculty data:', error);
       setToast({ message: 'Failed to load data', type: 'error' });
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // Handle article creation
+  const handleCreateArticle = async () => {
+    if (!userProfile || !newArticle.title.trim() || !newArticle.content.trim()) return;
+    
+    try {
+      await createNewsArticle({
+        title: newArticle.title,
+        content: newArticle.content,
+        summary60Words: newArticle.summary60Words,
+        source: newArticle.source,
+        sourceUrl: newArticle.sourceUrl,
+        imageUrl: newArticle.imageUrl,
+        tags: newArticle.tags,
+        gsPaper: newArticle.gsPaper,
+        readingTime: Math.ceil(newArticle.content.split(' ').length / 200), // Estimate reading time
+        isPublished: true,
+        publishedAt: new Date(),
+        createdBy: userProfile.uid,
+        createdByEmail: userProfile.email,
+      });
+      
+      setToast({ message: 'Article created successfully', type: 'success' });
+      setShowCreateArticleModal(false);
+      setNewArticle({
+        title: '',
+        content: '',
+        summary60Words: '',
+        source: 'The Hindu',
+        sourceUrl: '',
+        imageUrl: '',
+        tags: [],
+        gsPaper: [],
+      });
+      fetchData();
+    } catch (error) {
+      setToast({ message: 'Failed to create article', type: 'error' });
+    }
+  };
+  
+  // Handle PYQ creation
+  const handleCreatePYQ = async () => {
+    if (!userProfile || !newPYQ.question.trim()) return;
+    
+    try {
+      await createPYQ({
+        year: newPYQ.year,
+        paper: newPYQ.paper,
+        questionNumber: newPYQ.questionNumber,
+        question: newPYQ.question,
+        options: newPYQ.paper === 'Prelims' ? newPYQ.options.filter(o => o.trim()) : undefined,
+        correctAnswer: newPYQ.correctAnswer,
+        explanation: newPYQ.explanation,
+        subject: newPYQ.subject,
+        topic: newPYQ.topic,
+        difficulty: newPYQ.difficulty,
+        createdBy: userProfile.uid,
+      });
+      
+      setToast({ message: 'PYQ added successfully', type: 'success' });
+      setShowCreatePYQModal(false);
+      setNewPYQ({
+        year: new Date().getFullYear() - 1,
+        paper: 'Prelims',
+        questionNumber: 1,
+        question: '',
+        options: ['', '', '', ''],
+        correctAnswer: '',
+        explanation: '',
+        subject: '',
+        topic: '',
+        difficulty: 'Medium',
+      });
+    } catch (error) {
+      setToast({ message: 'Failed to add PYQ', type: 'error' });
+    }
+  };
+  
+  // Handle article deletion
+  const handleDeleteArticle = async (articleId: string) => {
+    if (!confirm('Are you sure you want to delete this article?')) return;
+    
+    try {
+      await deleteNewsArticle(articleId);
+      setToast({ message: 'Article deleted', type: 'success' });
+      fetchData();
+    } catch (error) {
+      setToast({ message: 'Failed to delete article', type: 'error' });
     }
   };
 
@@ -238,6 +367,7 @@ export const FacultyDashboard: React.FC = () => {
           { id: 'overview', label: 'Overview', icon: 'dashboard' },
           { id: 'batches', label: 'My Batches', icon: 'groups' },
           { id: 'students', label: 'Students', icon: 'person' },
+          { id: 'content', label: 'Content', icon: 'article' },
           { id: 'analytics', label: 'Analytics', icon: 'analytics' },
         ].map(tab => (
           <button
@@ -510,6 +640,120 @@ export const FacultyDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Content Tab */}
+      {activeTab === 'content' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-bold text-white">Content Management</h3>
+              <p className="text-sm text-[#c9ad92]">Create and manage articles, PYQs, and study materials</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" icon="add" onClick={() => setShowCreatePYQModal(true)}>
+                Add PYQ
+              </Button>
+              <Button icon="add" onClick={() => setShowCreateArticleModal(true)}>
+                New Article
+              </Button>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <GlassCard 
+              className="cursor-pointer hover:bg-white/10 transition-all"
+              onClick={() => setShowCreateArticleModal(true)}
+            >
+              <div className="flex items-center gap-4">
+                <div className="size-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-blue-400">article</span>
+                </div>
+                <div>
+                  <h4 className="font-bold text-white">News Article</h4>
+                  <p className="text-sm text-[#c9ad92]">Add daily current affairs</p>
+                </div>
+              </div>
+            </GlassCard>
+            
+            <GlassCard 
+              className="cursor-pointer hover:bg-white/10 transition-all"
+              onClick={() => setShowCreatePYQModal(true)}
+            >
+              <div className="flex items-center gap-4">
+                <div className="size-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-purple-400">quiz</span>
+                </div>
+                <div>
+                  <h4 className="font-bold text-white">Previous Year Q</h4>
+                  <p className="text-sm text-[#c9ad92]">Add UPSC PYQs</p>
+                </div>
+              </div>
+            </GlassCard>
+            
+            <GlassCard className="opacity-60">
+              <div className="flex items-center gap-4">
+                <div className="size-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-green-400">description</span>
+                </div>
+                <div>
+                  <h4 className="font-bold text-white">Editorial Brief</h4>
+                  <p className="text-sm text-[#c9ad92]">Coming soon</p>
+                </div>
+              </div>
+            </GlassCard>
+          </div>
+
+          {/* My Articles */}
+          <GlassCard>
+            <h4 className="font-bold text-white mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-blue-400">article</span>
+              My Articles ({articles.length})
+            </h4>
+            
+            {articles.length > 0 ? (
+              <div className="space-y-3">
+                {articles.map((article, index) => (
+                  <div 
+                    key={article.id || `article-${index}`}
+                    className="flex items-start justify-between p-4 rounded-lg bg-white/5"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <h5 className="font-medium text-white truncate">{article.title}</h5>
+                      <p className="text-sm text-[#c9ad92] line-clamp-2 mt-1">
+                        {article.content.substring(0, 150)}...
+                      </p>
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className="text-xs text-[#c9ad92]">
+                          {article.createdAt.toLocaleDateString()}
+                        </span>
+                        <div className="flex gap-1">
+                          {article.tags.slice(0, 3).map((tag, i) => (
+                            <Badge key={i} color="blue">{tag}</Badge>
+                          ))}
+                        </div>
+                        <Badge color={article.isPublished ? 'green' : 'yellow'}>
+                          {article.isPublished ? 'Published' : 'Draft'}
+                        </Badge>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      icon="delete"
+                      onClick={() => article.id && handleDeleteArticle(article.id)}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-[#c9ad92]">
+                <span className="material-symbols-outlined text-4xl mb-2">article</span>
+                <p>No articles yet. Create your first article!</p>
+              </div>
+            )}
+          </GlassCard>
+        </div>
+      )}
+
       {/* Analytics Tab */}
       {activeTab === 'analytics' && (
         <GlassCard className="text-center py-12">
@@ -699,6 +943,283 @@ export const FacultyDashboard: React.FC = () => {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Create Article Modal */}
+      <Modal 
+        isOpen={showCreateArticleModal} 
+        onClose={() => setShowCreateArticleModal(false)} 
+        title="Create News Article"
+      >
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+          <Input
+            label="Article Title"
+            placeholder="Enter article title..."
+            value={newArticle.title}
+            onChange={(e) => setNewArticle({ ...newArticle, title: e.target.value })}
+          />
+          
+          <div className="space-y-2">
+            <label className="text-sm text-[#c9ad92]">Article Content *</label>
+            <textarea
+              placeholder="Write the full article content..."
+              value={newArticle.content}
+              onChange={(e) => setNewArticle({ ...newArticle, content: e.target.value })}
+              className="w-full glass-input rounded-lg px-4 py-3 text-sm resize-none h-40"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <label className="text-sm text-[#c9ad92]">60-Word Summary (Optional)</label>
+            <textarea
+              placeholder="Brief 60-word summary for quick reading..."
+              value={newArticle.summary60Words}
+              onChange={(e) => setNewArticle({ ...newArticle, summary60Words: e.target.value })}
+              className="w-full glass-input rounded-lg px-4 py-3 text-sm resize-none h-20"
+            />
+            <p className="text-xs text-[#c9ad92]">
+              Words: {newArticle.summary60Words.split(' ').filter(w => w).length}/60
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Source"
+              placeholder="e.g., The Hindu"
+              value={newArticle.source}
+              onChange={(e) => setNewArticle({ ...newArticle, source: e.target.value })}
+            />
+            <Input
+              label="Source URL"
+              placeholder="https://..."
+              value={newArticle.sourceUrl}
+              onChange={(e) => setNewArticle({ ...newArticle, sourceUrl: e.target.value })}
+            />
+          </div>
+          
+          <Input
+            label="Image URL (Optional)"
+            placeholder="https://..."
+            value={newArticle.imageUrl}
+            onChange={(e) => setNewArticle({ ...newArticle, imageUrl: e.target.value })}
+          />
+          
+          <div className="space-y-2">
+            <label className="text-sm text-[#c9ad92]">Tags</label>
+            <div className="flex flex-wrap gap-2">
+              {['Polity', 'Economy', 'Environment', 'Science', 'International', 'Social', 'Governance'].map(tag => (
+                <button
+                  key={tag}
+                  onClick={() => {
+                    if (newArticle.tags.includes(tag)) {
+                      setNewArticle({ ...newArticle, tags: newArticle.tags.filter(t => t !== tag) });
+                    } else {
+                      setNewArticle({ ...newArticle, tags: [...newArticle.tags, tag] });
+                    }
+                  }}
+                  className={`px-3 py-1 rounded-full text-sm transition-all ${
+                    newArticle.tags.includes(tag)
+                      ? 'bg-primary text-white'
+                      : 'bg-white/10 text-[#c9ad92] hover:bg-white/20'
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <label className="text-sm text-[#c9ad92]">GS Paper Relevance</label>
+            <div className="flex flex-wrap gap-2">
+              {['GS1', 'GS2', 'GS3', 'GS4', 'Prelims'].map(paper => (
+                <button
+                  key={paper}
+                  onClick={() => {
+                    if (newArticle.gsPaper.includes(paper)) {
+                      setNewArticle({ ...newArticle, gsPaper: newArticle.gsPaper.filter(p => p !== paper) });
+                    } else {
+                      setNewArticle({ ...newArticle, gsPaper: [...newArticle.gsPaper, paper] });
+                    }
+                  }}
+                  className={`px-3 py-1 rounded-full text-sm transition-all ${
+                    newArticle.gsPaper.includes(paper)
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-white/10 text-[#c9ad92] hover:bg-white/20'
+                  }`}
+                >
+                  {paper}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <Button variant="secondary" fullWidth onClick={() => setShowCreateArticleModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              fullWidth 
+              onClick={handleCreateArticle}
+              disabled={!newArticle.title.trim() || !newArticle.content.trim()}
+            >
+              Publish Article
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Create PYQ Modal */}
+      <Modal 
+        isOpen={showCreatePYQModal} 
+        onClose={() => setShowCreatePYQModal(false)} 
+        title="Add Previous Year Question"
+      >
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm text-[#c9ad92]">Year</label>
+              <select
+                value={newPYQ.year}
+                onChange={(e) => setNewPYQ({ ...newPYQ, year: parseInt(e.target.value) })}
+                className="w-full glass-input rounded-lg px-4 py-2.5 text-sm"
+              >
+                {Array.from({ length: 15 }, (_, i) => new Date().getFullYear() - 1 - i).map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm text-[#c9ad92]">Paper</label>
+              <select
+                value={newPYQ.paper}
+                onChange={(e) => setNewPYQ({ ...newPYQ, paper: e.target.value as any })}
+                className="w-full glass-input rounded-lg px-4 py-2.5 text-sm"
+              >
+                <option value="Prelims">Prelims</option>
+                <option value="Mains-GS1">Mains GS1</option>
+                <option value="Mains-GS2">Mains GS2</option>
+                <option value="Mains-GS3">Mains GS3</option>
+                <option value="Mains-GS4">Mains GS4</option>
+                <option value="Essay">Essay</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm text-[#c9ad92]">Q. No.</label>
+              <Input
+                type="number"
+                value={newPYQ.questionNumber}
+                onChange={(e) => setNewPYQ({ ...newPYQ, questionNumber: parseInt(e.target.value) || 1 })}
+              />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <label className="text-sm text-[#c9ad92]">Question *</label>
+            <textarea
+              placeholder="Enter the question..."
+              value={newPYQ.question}
+              onChange={(e) => setNewPYQ({ ...newPYQ, question: e.target.value })}
+              className="w-full glass-input rounded-lg px-4 py-3 text-sm resize-none h-24"
+            />
+          </div>
+          
+          {newPYQ.paper === 'Prelims' && (
+            <div className="space-y-3">
+              <label className="text-sm text-[#c9ad92]">Options (for Prelims MCQ)</label>
+              {['A', 'B', 'C', 'D'].map((letter, index) => (
+                <div key={letter} className="flex items-center gap-2">
+                  <span className="text-[#c9ad92] font-medium w-6">{letter})</span>
+                  <Input
+                    placeholder={`Option ${letter}`}
+                    value={newPYQ.options[index]}
+                    onChange={(e) => {
+                      const newOptions = [...newPYQ.options];
+                      newOptions[index] = e.target.value;
+                      setNewPYQ({ ...newPYQ, options: newOptions });
+                    }}
+                  />
+                </div>
+              ))}
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-[#c9ad92]">Correct Answer:</label>
+                <select
+                  value={newPYQ.correctAnswer}
+                  onChange={(e) => setNewPYQ({ ...newPYQ, correctAnswer: e.target.value })}
+                  className="glass-input rounded-lg px-4 py-2 text-sm"
+                >
+                  <option value="">Select</option>
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                  <option value="D">D</option>
+                </select>
+              </div>
+            </div>
+          )}
+          
+          <div className="space-y-2">
+            <label className="text-sm text-[#c9ad92]">Explanation</label>
+            <textarea
+              placeholder="Explain the answer..."
+              value={newPYQ.explanation}
+              onChange={(e) => setNewPYQ({ ...newPYQ, explanation: e.target.value })}
+              className="w-full glass-input rounded-lg px-4 py-3 text-sm resize-none h-20"
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm text-[#c9ad92]">Subject</label>
+              <select
+                value={newPYQ.subject}
+                onChange={(e) => setNewPYQ({ ...newPYQ, subject: e.target.value })}
+                className="w-full glass-input rounded-lg px-4 py-2.5 text-sm"
+              >
+                <option value="">Select Subject</option>
+                <option value="Polity">Polity</option>
+                <option value="History">History</option>
+                <option value="Geography">Geography</option>
+                <option value="Economy">Economy</option>
+                <option value="Environment">Environment</option>
+                <option value="Science">Science</option>
+                <option value="Current Affairs">Current Affairs</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm text-[#c9ad92]">Difficulty</label>
+              <select
+                value={newPYQ.difficulty}
+                onChange={(e) => setNewPYQ({ ...newPYQ, difficulty: e.target.value as any })}
+                className="w-full glass-input rounded-lg px-4 py-2.5 text-sm"
+              >
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+              </select>
+            </div>
+          </div>
+          
+          <Input
+            label="Topic"
+            placeholder="e.g., Fundamental Rights, French Revolution"
+            value={newPYQ.topic}
+            onChange={(e) => setNewPYQ({ ...newPYQ, topic: e.target.value })}
+          />
+          
+          <div className="flex gap-3 pt-4">
+            <Button variant="secondary" fullWidth onClick={() => setShowCreatePYQModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              fullWidth 
+              onClick={handleCreatePYQ}
+              disabled={!newPYQ.question.trim() || !newPYQ.subject}
+            >
+              Add PYQ
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

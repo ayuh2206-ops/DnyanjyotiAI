@@ -17,15 +17,19 @@ import {
   createFaculty,
   deleteFaculty,
   getAdminLogs,
+  assignFacultyByEmail,
+  getAllFacultyAssignments,
+  removeFacultyAssignment,
   UserProfile,
   Faculty,
   Batch,
   Payment,
   AdminLog,
+  FacultyAssignment,
 } from '@/lib/db';
 import { GlassCard, Button, Badge, Input, Modal, Avatar, LoadingSpinner, Toast } from '../UI';
 
-type TabType = 'overview' | 'users' | 'faculties' | 'batches' | 'payments' | 'logs';
+type TabType = 'overview' | 'users' | 'faculties' | 'assignments' | 'batches' | 'payments' | 'logs';
 
 interface SystemStats {
   totalUsers: number;
@@ -55,6 +59,7 @@ export const VERODashboard: React.FC = () => {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [adminLogs, setAdminLogs] = useState<AdminLog[]>([]);
+  const [facultyAssignments, setFacultyAssignments] = useState<FacultyAssignment[]>([]);
   
   // UI state
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,8 +67,14 @@ export const VERODashboard: React.FC = () => {
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showAddFacultyModal, setShowAddFacultyModal] = useState(false);
+  const [showAssignFacultyModal, setShowAssignFacultyModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  
+  // Form state for new faculty assignment
+  const [newFacultyEmail, setNewFacultyEmail] = useState('');
+  const [newFacultyName, setNewFacultyName] = useState('');
+  const [newFacultySpecializations, setNewFacultySpecializations] = useState<string[]>([]);
 
   useEffect(() => {
     fetchAllData();
@@ -72,13 +83,14 @@ export const VERODashboard: React.FC = () => {
   const fetchAllData = async () => {
     try {
       setLoading(true);
-      const [statsData, usersData, facultiesData, batchesData, paymentsData, logsData] = await Promise.all([
+      const [statsData, usersData, facultiesData, batchesData, paymentsData, logsData, assignmentsData] = await Promise.all([
         getSystemStats(),
         getAllUsers(),
         getAllFaculties(),
         getAllBatches(),
         getAllPayments(),
         getAdminLogs(100),
+        getAllFacultyAssignments(),
       ]);
       
       setStats(statsData);
@@ -87,11 +99,49 @@ export const VERODashboard: React.FC = () => {
       setBatches(batchesData);
       setPayments(paymentsData);
       setAdminLogs(logsData);
+      setFacultyAssignments(assignmentsData);
     } catch (error) {
       console.error('Error fetching data:', error);
       setToast({ message: 'Failed to load data', type: 'error' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle faculty assignment by email
+  const handleAssignFaculty = async () => {
+    if (!userProfile || !newFacultyEmail.trim()) return;
+    
+    try {
+      await assignFacultyByEmail(
+        newFacultyEmail.trim(),
+        newFacultyName.trim() || 'Faculty',
+        newFacultySpecializations,
+        userProfile.uid,
+        userProfile.email
+      );
+      
+      setToast({ message: `Faculty invitation sent to ${newFacultyEmail}`, type: 'success' });
+      setShowAssignFacultyModal(false);
+      setNewFacultyEmail('');
+      setNewFacultyName('');
+      setNewFacultySpecializations([]);
+      fetchAllData();
+    } catch (error: any) {
+      setToast({ message: error.message || 'Failed to assign faculty', type: 'error' });
+    }
+  };
+
+  // Handle remove faculty assignment
+  const handleRemoveFacultyAssignment = async (assignmentId: string) => {
+    if (!userProfile) return;
+    
+    try {
+      await removeFacultyAssignment(assignmentId, userProfile.uid, userProfile.email);
+      setToast({ message: 'Faculty assignment removed', type: 'success' });
+      fetchAllData();
+    } catch (error: any) {
+      setToast({ message: error.message || 'Failed to remove assignment', type: 'error' });
     }
   };
 
@@ -281,6 +331,7 @@ export const VERODashboard: React.FC = () => {
           { id: 'overview', label: 'Overview', icon: 'dashboard' },
           { id: 'users', label: 'All Users', icon: 'group' },
           { id: 'faculties', label: 'Faculties', icon: 'school' },
+          { id: 'assignments', label: 'Faculty Invites', icon: 'mail' },
           { id: 'batches', label: 'Batches', icon: 'groups' },
           { id: 'payments', label: 'Payments', icon: 'payments' },
           { id: 'logs', label: 'Admin Logs', icon: 'history' },
@@ -296,6 +347,11 @@ export const VERODashboard: React.FC = () => {
           >
             <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
             {tab.label}
+            {tab.id === 'assignments' && facultyAssignments.filter(a => !a.isActivated).length > 0 && (
+              <span className="bg-primary text-white text-xs px-1.5 py-0.5 rounded-full">
+                {facultyAssignments.filter(a => !a.isActivated).length}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -556,7 +612,12 @@ export const VERODashboard: React.FC = () => {
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-bold text-white">Faculty Management</h3>
-            <Button icon="add" onClick={() => setShowAddFacultyModal(true)}>Add Faculty</Button>
+            <div className="flex gap-2">
+              <Button variant="secondary" icon="mail" onClick={() => setShowAssignFacultyModal(true)}>
+                Invite by Email
+              </Button>
+              <Button icon="add" onClick={() => setShowAddFacultyModal(true)}>Add Existing User</Button>
+            </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -597,10 +658,104 @@ export const VERODashboard: React.FC = () => {
             {faculties.length === 0 && (
               <div className="col-span-full text-center py-12 text-[#c9ad92]">
                 <span className="material-symbols-outlined text-4xl mb-2">school</span>
-                <p>No faculties yet. Add your first faculty member.</p>
+                <p>No faculties yet. Invite faculty members by email or add existing users.</p>
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Faculty Assignments Tab */}
+      {activeTab === 'assignments' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-bold text-white">Faculty Invitations</h3>
+              <p className="text-sm text-[#c9ad92]">Invite users to become faculty by entering their email address</p>
+            </div>
+            <Button icon="mail" onClick={() => setShowAssignFacultyModal(true)}>
+              Invite Faculty
+            </Button>
+          </div>
+          
+          {/* Pending Invitations */}
+          <GlassCard>
+            <h4 className="font-bold text-white mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">pending</span>
+              Pending Invitations
+            </h4>
+            <div className="space-y-3">
+              {facultyAssignments.filter(a => !a.isActivated).map((assignment, index) => (
+                <div 
+                  key={assignment.id || `assignment-pending-${index}`}
+                  className="flex items-center justify-between p-4 rounded-lg bg-white/5"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-full bg-primary/20 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-primary">mail</span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-white">{assignment.displayName || 'Pending Faculty'}</p>
+                      <p className="text-sm text-[#c9ad92]">{assignment.email}</p>
+                      <div className="flex gap-2 mt-1">
+                        {assignment.specialization?.map((spec, i) => (
+                          <Badge key={i} color="blue">{spec}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge color="yellow">Pending</Badge>
+                    <Button 
+                      variant="secondary" 
+                      icon="delete"
+                      onClick={() => assignment.id && handleRemoveFacultyAssignment(assignment.id)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              
+              {facultyAssignments.filter(a => !a.isActivated).length === 0 && (
+                <p className="text-center py-8 text-[#c9ad92]">No pending invitations</p>
+              )}
+            </div>
+          </GlassCard>
+
+          {/* Activated Invitations */}
+          <GlassCard>
+            <h4 className="font-bold text-white mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-green-400">check_circle</span>
+              Activated Invitations
+            </h4>
+            <div className="space-y-3">
+              {facultyAssignments.filter(a => a.isActivated).map((assignment, index) => (
+                <div 
+                  key={assignment.id || `assignment-active-${index}`}
+                  className="flex items-center justify-between p-4 rounded-lg bg-white/5"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-green-400">check</span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-white">{assignment.displayName || 'Faculty'}</p>
+                      <p className="text-sm text-[#c9ad92]">{assignment.email}</p>
+                      <p className="text-xs text-green-400 mt-1">
+                        Activated on {assignment.activatedAt?.toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge color="green">Active</Badge>
+                </div>
+              ))}
+              
+              {facultyAssignments.filter(a => a.isActivated).length === 0 && (
+                <p className="text-center py-8 text-[#c9ad92]">No activated invitations yet</p>
+              )}
+            </div>
+          </GlassCard>
         </div>
       )}
 
@@ -839,6 +994,94 @@ export const VERODashboard: React.FC = () => {
               </Button>
             </div>
           ))}
+        </div>
+      </Modal>
+
+      {/* Invite Faculty by Email Modal */}
+      <Modal 
+        isOpen={showAssignFacultyModal} 
+        onClose={() => {
+          setShowAssignFacultyModal(false);
+          setNewFacultyEmail('');
+          setNewFacultyName('');
+          setNewFacultySpecializations([]);
+        }} 
+        title="Invite Faculty by Email"
+      >
+        <p className="text-[#c9ad92] mb-4">
+          Enter an email address to invite someone as faculty. When they sign up or log in with this email, 
+          they will automatically be assigned the Faculty role.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-[#c9ad92] mb-1">Email Address *</label>
+            <Input
+              type="email"
+              value={newFacultyEmail}
+              onChange={(e) => setNewFacultyEmail(e.target.value)}
+              placeholder="faculty@example.com"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#c9ad92] mb-1">Display Name</label>
+            <Input
+              value={newFacultyName}
+              onChange={(e) => setNewFacultyName(e.target.value)}
+              placeholder="Dr. John Doe"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#c9ad92] mb-2">Specialization</label>
+            <div className="flex flex-wrap gap-2">
+              {['Polity', 'History', 'Geography', 'Economy', 'Environment', 'Science', 'Ethics', 'Current Affairs'].map(subject => (
+                <button
+                  key={subject}
+                  onClick={() => {
+                    if (newFacultySpecializations.includes(subject)) {
+                      setNewFacultySpecializations(prev => prev.filter(s => s !== subject));
+                    } else {
+                      setNewFacultySpecializations(prev => [...prev, subject]);
+                    }
+                  }}
+                  className={`px-3 py-1 rounded-full text-sm transition-all ${
+                    newFacultySpecializations.includes(subject)
+                      ? 'bg-primary text-white'
+                      : 'bg-white/10 text-[#c9ad92] hover:bg-white/20'
+                  }`}
+                >
+                  {subject}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mt-4">
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined text-blue-400">info</span>
+              <div className="text-sm text-blue-200">
+                <p className="font-medium mb-1">How it works:</p>
+                <ol className="list-decimal list-inside space-y-1 text-blue-300">
+                  <li>Enter the faculty member&apos;s email address</li>
+                  <li>They sign up or log in using that email</li>
+                  <li>They are automatically assigned the Faculty role</li>
+                  <li>They can then access the Faculty Dashboard</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <Button variant="secondary" fullWidth onClick={() => setShowAssignFacultyModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              fullWidth 
+              onClick={handleAssignFaculty}
+              disabled={!newFacultyEmail.trim()}
+            >
+              Send Invitation
+            </Button>
+          </div>
         </div>
       </Modal>
     </div>
