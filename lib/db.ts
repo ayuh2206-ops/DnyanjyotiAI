@@ -363,6 +363,49 @@ export interface MindMap {
   createdAt: Date;
 }
 
+// Gamification Badges
+export interface Badge {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  requirement: {
+    type: 'streak' | 'tests' | 'score' | 'study_time' | 'special';
+    value: number;
+  };
+  earnedAt?: Date;
+}
+
+export interface UserBadge {
+  id?: string;
+  userId: string;
+  badgeId: string;
+  earnedAt: Date;
+}
+
+// All available badges
+export const AVAILABLE_BADGES: Badge[] = [
+  // Streak Badges
+  { id: 'fire_starter', name: 'Fire Starter', description: '7-day study streak', icon: '🔥', color: 'orange', requirement: { type: 'streak', value: 7 } },
+  { id: 'consistent', name: 'Consistent', description: '30-day study streak', icon: '⚡', color: 'yellow', requirement: { type: 'streak', value: 30 } },
+  { id: 'diamond', name: 'Diamond', description: '90-day study streak', icon: '💎', color: 'blue', requirement: { type: 'streak', value: 90 } },
+  { id: 'legend', name: 'Legend', description: '180-day study streak', icon: '🏆', color: 'gold', requirement: { type: 'streak', value: 180 } },
+  
+  // Test Completion Badges
+  { id: 'first_test', name: 'First Steps', description: 'Complete your first test', icon: '🎯', color: 'green', requirement: { type: 'tests', value: 1 } },
+  { id: 'dedicated', name: 'Dedicated', description: 'Complete 25 tests', icon: '📚', color: 'purple', requirement: { type: 'tests', value: 25 } },
+  { id: 'master', name: 'Test Master', description: 'Complete 100 tests', icon: '🎓', color: 'indigo', requirement: { type: 'tests', value: 100 } },
+  
+  // Score Badges
+  { id: 'sharp_mind', name: 'Sharp Mind', description: 'Score 90% in any test', icon: '🧠', color: 'pink', requirement: { type: 'score', value: 90 } },
+  { id: 'perfectionist', name: 'Perfectionist', description: 'Score 100% in any test', icon: '✨', color: 'rainbow', requirement: { type: 'score', value: 100 } },
+  
+  // Study Time Badges
+  { id: 'night_owl', name: 'Night Owl', description: '50 hours of study time', icon: '🦉', color: 'gray', requirement: { type: 'study_time', value: 50 } },
+  { id: 'marathon', name: 'Marathon', description: '200 hours of study time', icon: '🏃', color: 'teal', requirement: { type: 'study_time', value: 200 } },
+];
+
 // ============== USER OPERATIONS ==============
 
 export async function getAllUsers(): Promise<UserProfile[]> {
@@ -2079,6 +2122,98 @@ export async function getUserMindMaps(userId: string): Promise<MindMap[]> {
   }
 }
 
+// ============== GAMIFICATION BADGES ==============
+
+export async function getUserBadges(userId: string): Promise<Badge[]> {
+  try {
+    const q = query(
+      collection(db, 'userBadges'),
+      where('userId', '==', userId)
+    );
+    const snapshot = await getDocs(q);
+    const earnedBadgeIds = snapshot.docs.map(doc => doc.data().badgeId);
+    
+    return AVAILABLE_BADGES.filter(badge => earnedBadgeIds.includes(badge.id)).map(badge => ({
+      ...badge,
+      earnedAt: snapshot.docs.find(doc => doc.data().badgeId === badge.id)?.data()?.earnedAt?.toDate()
+    }));
+  } catch (error) {
+    console.error('Error getting user badges:', error);
+    return [];
+  }
+}
+
+export async function awardBadge(userId: string, badgeId: string): Promise<boolean> {
+  try {
+    // Check if badge already awarded
+    const existingQ = query(
+      collection(db, 'userBadges'),
+      where('userId', '==', userId),
+      where('badgeId', '==', badgeId)
+    );
+    const existing = await getDocs(existingQ);
+    if (!existing.empty) return false;
+    
+    // Award badge
+    await addDoc(collection(db, 'userBadges'), {
+      userId,
+      badgeId,
+      earnedAt: serverTimestamp(),
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('Error awarding badge:', error);
+    return false;
+  }
+}
+
+export async function checkAndAwardBadges(
+  userId: string, 
+  userProfile: { streak: number; testsCompleted: number; totalStudyTime: number; averageScore?: number }
+): Promise<Badge[]> {
+  const newBadges: Badge[] = [];
+  
+  try {
+    // Get current badges
+    const currentBadges = await getUserBadges(userId);
+    const earnedIds = new Set(currentBadges.map(b => b.id));
+    
+    for (const badge of AVAILABLE_BADGES) {
+      if (earnedIds.has(badge.id)) continue;
+      
+      let shouldAward = false;
+      
+      switch (badge.requirement.type) {
+        case 'streak':
+          shouldAward = userProfile.streak >= badge.requirement.value;
+          break;
+        case 'tests':
+          shouldAward = userProfile.testsCompleted >= badge.requirement.value;
+          break;
+        case 'study_time':
+          shouldAward = (userProfile.totalStudyTime / 60) >= badge.requirement.value; // Convert minutes to hours
+          break;
+        case 'score':
+          shouldAward = (userProfile.averageScore || 0) >= badge.requirement.value;
+          break;
+      }
+      
+      if (shouldAward) {
+        const awarded = await awardBadge(userId, badge.id);
+        if (awarded) {
+          newBadges.push({ ...badge, earnedAt: new Date() });
+        }
+      }
+    }
+    
+    return newBadges;
+  } catch (error) {
+    console.error('Error checking badges:', error);
+    return [];
+  }
+}
+
 // ============== BOOKMARKS ==============
 
 export async function bookmarkArticle(
@@ -2237,6 +2372,11 @@ export default {
   bookmarkArticle,
   getUserBookmarks,
   removeBookmark,
+  // Badges
+  getUserBadges,
+  awardBadge,
+  checkAndAwardBadges,
+  AVAILABLE_BADGES,
   // Realtime
   subscribeToUserProfile,
 };

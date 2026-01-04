@@ -325,11 +325,11 @@ export const Chat: React.FC = () => {
             </div>
           )}
           
-          <div ref={messagesEndRef} className="h-32" />
+          <div ref={messagesEndRef} className="h-4" />
         </div>
 
-        {/* Input Area */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 md:px-16 lg:px-32 xl:px-48 pb-6 bg-gradient-to-t from-[#221910] via-[#221910] to-transparent z-20">
+        {/* Input Area - Fixed at bottom with proper spacing */}
+        <div className="shrink-0 p-4 md:px-16 lg:px-32 xl:px-48 pb-4 bg-[#221910] border-t border-white/5">
           {/* Input Bar */}
           <div className="glass-input rounded-2xl p-2 flex items-end gap-2 relative transition-all focus-within:ring-1 focus-within:ring-primary/50 focus-within:border-primary/50">
             <textarea

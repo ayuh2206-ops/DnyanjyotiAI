@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { GlassCard, Button, Badge, LoadingSpinner } from '../UI';
+import { GlassCard, Button, Badge, LoadingSpinner, Toast } from '../UI';
+import { getNewsArticles, getEditorialBriefs, NewsArticle, EditorialBrief } from '@/lib/db';
 
 interface Article {
   id: string;
@@ -26,7 +27,7 @@ const CATEGORIES = [
   { id: 'social', name: 'Social Issues', icon: 'groups' },
 ];
 
-// Mock data for demonstration - in production, this would come from API
+// Mock data for demonstration - used when no articles in database
 const MOCK_ARTICLES: Article[] = [
   {
     id: '1',
@@ -102,10 +103,71 @@ export const DailyAffairs: React.FC = () => {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [generatingQuiz, setGeneratingQuiz] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState<string | null>(null);
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  useEffect(() => {
+    fetchArticles();
+  }, []);
+
+  const fetchArticles = async () => {
+    try {
+      setLoading(true);
+      const newsArticles = await getNewsArticles(true, 50);
+      
+      if (newsArticles.length > 0) {
+        // Convert database articles to display format
+        const formattedArticles: Article[] = newsArticles.map((article: NewsArticle) => ({
+          id: article.id || '',
+          title: article.title,
+          summary: article.summary60Words || article.content.substring(0, 200) + '...',
+          category: article.tags[0]?.toLowerCase() || 'general',
+          gsRelevance: article.gsPaper || [],
+          source: article.source,
+          publishedAt: formatTimeAgo(article.publishedAt || article.createdAt),
+          imageUrl: article.imageUrl || getDefaultImage(article.tags[0]),
+          readTime: `${article.readingTime} min`,
+        }));
+        setArticles(formattedArticles);
+      } else {
+        // Use mock data if no articles in database
+        setArticles(MOCK_ARTICLES);
+      }
+    } catch (error) {
+      console.error('Error fetching articles:', error);
+      setArticles(MOCK_ARTICLES);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatTimeAgo = (date: Date): string => {
+    const now = new Date();
+    const diffMs = now.getTime() - new Date(date).getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return 'Yesterday';
+    return `${diffDays} days ago`;
+  };
+
+  const getDefaultImage = (category: string): string => {
+    const images: Record<string, string> = {
+      polity: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=400',
+      economy: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400',
+      environment: 'https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=400',
+      science: 'https://images.unsplash.com/photo-1516849841032-87cbac4d88f7?w=400',
+      international: 'https://images.unsplash.com/photo-1532375810709-75b1da00537c?w=400',
+    };
+    return images[category?.toLowerCase()] || 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400';
+  };
 
   const filteredArticles = activeCategory === 'all' 
-    ? MOCK_ARTICLES 
-    : MOCK_ARTICLES.filter(a => a.category === activeCategory);
+    ? articles 
+    : articles.filter(a => a.category === activeCategory);
 
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
@@ -124,13 +186,13 @@ export const DailyAffairs: React.FC = () => {
     
     const tokenCost = 10;
     if ((userProfile?.tokens || 0) < tokenCost) {
-      alert('Not enough tokens. Please upgrade your plan.');
+      setToast({ message: 'Not enough tokens. Please upgrade your plan.', type: 'error' });
       return;
     }
 
     setGeneratingQuiz(articleId);
     try {
-      const article = MOCK_ARTICLES.find(a => a.id === articleId);
+      const article = articles.find(a => a.id === articleId);
       if (!article) return;
 
       // Call quiz generation API
@@ -154,11 +216,10 @@ export const DailyAffairs: React.FC = () => {
 
       await deductTokens(tokenCost);
       
-      // For now, just show alert - in production, navigate to quiz
-      alert(`Quiz generated! ${data.questions.length} questions based on "${article.title}"`);
+      setToast({ message: `Quiz generated! ${data.questions.length} questions based on "${article.title}"`, type: 'success' });
     } catch (error) {
       console.error('Error generating quiz:', error);
-      alert('Failed to generate quiz. Please try again.');
+      setToast({ message: 'Failed to generate quiz. Please try again.', type: 'error' });
     } finally {
       setGeneratingQuiz(null);
     }
@@ -169,7 +230,7 @@ export const DailyAffairs: React.FC = () => {
     
     const tokenCost = 3;
     if ((userProfile?.tokens || 0) < tokenCost) {
-      alert('Not enough tokens. Please upgrade your plan.');
+      setToast({ message: 'Not enough tokens. Please upgrade your plan.', type: 'error' });
       return;
     }
 
@@ -179,7 +240,7 @@ export const DailyAffairs: React.FC = () => {
       // Simulate summary generation - in production would call AI API
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      const article = MOCK_ARTICLES.find(a => a.id === articleId);
+      const article = articles.find(a => a.id === articleId);
       if (article) {
         setSelectedArticle(article);
       }
@@ -192,6 +253,14 @@ export const DailyAffairs: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(null)} 
+        />
+      )}
+      
       <div>
         <h1 className="text-3xl font-bold text-white mb-2">Daily Affairs & News</h1>
         <p className="text-[#c9ad92]">Stay updated with curated news briefs tailored for UPSC preparation</p>
@@ -223,18 +292,23 @@ export const DailyAffairs: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-green-400">schedule</span>
-          <span className="text-sm text-[#c9ad92]">Updated 30 mins ago</span>
+          <span className="text-sm text-[#c9ad92]">Updated just now</span>
         </div>
         <div className="ml-auto">
-          <Button variant="ghost" icon="refresh">
+          <Button variant="ghost" icon="refresh" onClick={fetchArticles} loading={loading}>
             Refresh
           </Button>
         </div>
       </div>
 
       {/* Articles Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredArticles.map((article) => (
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <LoadingSpinner size="lg" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredArticles.map((article) => (
           <GlassCard
             key={article.id}
             className="overflow-hidden hover:border-primary/50 transition-all group cursor-pointer flex flex-col"
@@ -318,6 +392,7 @@ export const DailyAffairs: React.FC = () => {
           </GlassCard>
         ))}
       </div>
+      )}
 
       {/* Quick 60-Word Brief Panel */}
       {selectedArticle && (
@@ -345,7 +420,7 @@ export const DailyAffairs: React.FC = () => {
       )}
 
       {/* Empty State */}
-      {filteredArticles.length === 0 && (
+      {!loading && filteredArticles.length === 0 && (
         <div className="text-center py-12">
           <span className="material-symbols-outlined text-4xl text-[#c9ad92] mb-3">article</span>
           <p className="text-[#c9ad92]">No articles found in this category</p>

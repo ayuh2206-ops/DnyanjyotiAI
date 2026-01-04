@@ -5,22 +5,16 @@
   <h3>Your AI-Powered UPSC Preparation Suite</h3>
 </div>
 
-## 🚀 Phase 1.5 - Production Ready
+## 🚀 Phase 1 - Production Ready
 
-This is the Phase 1.5 release of DnyanGPT, featuring a three-tier role system (VERO/Faculty/Student), Firebase authentication, Firestore database, Gemini AI integration, **faculty email invitation system**, and **content management**.
-
-### ✨ NEW in Phase 1.5
-
-- **📧 Faculty Email Invitations**: VERO can invite faculty by email - they auto-become Faculty on login
-- **📰 Content Management**: Faculty can create news articles and add PYQs
-- **📚 Complete Database Infrastructure**: All types ready for Phase 2 AI features
+This is the Phase 1 release of DnyanGPT, featuring a three-tier role system (VERO/Faculty/Student), Firebase authentication, Firestore database, and Gemini AI integration.
 
 ### Features
 
 - **🔐 Authentication**: Google OAuth & Email/Password login
 - **👑 Three-Tier Role System**:
-  - **VERO (Super Admin)**: Full platform control, user management, faculty invitations
-  - **Faculty**: Batch management, student tracking, content creation
+  - **VERO (Super Admin)**: Full platform control, user management, faculty assignment
+  - **Faculty**: Batch management, student progress tracking, analytics
   - **Student**: Full access to learning features
 - **💬 UPSC-GPT Chat**: AI-powered Socratic tutor with subject-specific guidance
 - **📝 AI Quiz Generator**: Generate custom quizzes on any UPSC topic
@@ -137,16 +131,16 @@ dnyangpt-phase1/
 
 ## 🔑 Role Access
 
-| Role | How to Get | Access Level |
-|------|------------|--------------|
-| **VERO** (Super Admin) | Email matches `NEXT_PUBLIC_VERO_EMAIL` env var | Full platform control |
-| **Faculty** | Email pre-assigned by VERO via Faculty Invites | Batch & content management |
-| **Student** | Default for all registered users | All learning features |
+| Role | Login Email | Access Level |
+|------|-------------|--------------|
+| **VERO** (Super Admin) | `vero.media.150@gmail.com` | Full platform control |
+| **Faculty** | Assigned by VERO | Batch & student management |
+| **Student** | Any registered user | All learning features |
 
 ### VERO Dashboard Features
 - System-wide statistics
 - User management (grant/revoke access)
-- **NEW: Faculty email invitations (Faculty Invites tab)**
+- Faculty assignment
 - Payment tracking
 - Admin activity logs
 
@@ -155,62 +149,34 @@ dnyangpt-phase1/
 - Add/remove students from batches
 - Track student progress
 - View batch analytics
-- **NEW: Content tab - Create articles & add PYQs**
-
-### How Faculty Invitation Works
-1. VERO goes to VERO Dashboard → **Faculty Invites** tab
-2. Click **"Invite Faculty"**
-3. Enter faculty's email, name, and specializations
-4. When that person logs in with the email, they become Faculty automatically
 
 ## 📊 Database Schema
 
 ### Collections
 
-**Core Collections:**
 - **users**: User profiles, tokens, streak, subject scores, role, batch assignment
 - **faculties**: Faculty details and permissions
 - **batches**: Batch information, student lists
 - **payments**: Payment records
-- **admin_logs**: Admin action audit trail
-
-**Learning Data:**
 - **quiz_history**: Quiz attempts and results
 - **grading_history**: Essay evaluations
 - **chat_sessions**: Chat conversation history
 - **daily_activity**: Aggregated daily metrics
-
-**NEW in Phase 1.5:**
-- **facultyAssignments**: Email-based faculty invitations
-- **newsArticles**: Faculty-created current affairs
-- **editorialBriefs**: 60-word summaries
-- **pyqQuestions**: Previous Year Questions
-- **syllabus**: UPSC syllabus structure
-- **syllabusProgress**: User syllabus tracking
-- **flashcards**: User-generated flashcards
-- **mindMaps**: Visual study aids
-- **bookmarks**: User bookmarks
+- **admin_logs**: Admin action audit trail
 
 ## 🤖 AI Models
 
-| Model | Use Case | Speed |
-|-------|----------|-------|
-| Gemini 2.0 Flash | Chat, Quizzes, Flashcards, Summarization | Fast |
-| Gemini 2.5 Pro Preview | Essay Grading, Complex Analysis | Slower, Higher Quality |
+| Model | Use Case | Temperature |
+|-------|----------|-------------|
+| Gemini 2.0 Flash | Chat, Quizzes, Flashcards | 0.7 |
+| Gemini 1.5 Pro | Essay Grading, Analysis | 0.9 |
 
-**Rate Limits (Free Tier):**
-- Gemini 2.0 Flash: 15 requests/min
-- Gemini 2.5 Pro: 2 requests/min
-- Built-in retry logic with exponential backoff
-
-## 🚧 Phase 1.5 Testing Checklist
+## 🚧 Phase 1 Testing Checklist
 
 - [x] User registration (Google + Email)
 - [x] Three-tier role system (VERO/Faculty/Student)
 - [x] VERO dashboard with full admin controls
 - [x] Faculty dashboard with batch management
-- [x] **NEW: Faculty email invitation system**
-- [x] **NEW: Faculty content creation (articles/PYQs)**
 - [x] Token deduction on AI operations
 - [x] Quiz generation and submission
 - [x] Essay grading workflow
@@ -226,13 +192,7 @@ dnyangpt-phase1/
 ### AI Features Not Working
 1. Check that `GEMINI_API_KEY` is set in Vercel environment variables
 2. Ensure the API key is valid (get from [Google AI Studio](https://aistudio.google.com/app/apikey))
-3. **If quota error:** Create a new API key in a new project
-4. Check Vercel deployment logs for errors
-
-### Faculty Email Invite Not Working
-1. Ensure VERO created the invitation in Faculty Invites tab
-2. Faculty must log in with the **exact** email address
-3. Check `facultyAssignments` collection in Firebase Console
+3. Check Vercel deployment logs for errors
 
 ### Page Redirects Unexpectedly
 - Ensure you're using the latest code with the navigation fix
@@ -244,14 +204,12 @@ dnyangpt-phase1/
 
 ## 🔮 Phase 2 Preview
 
-Phase 2 will add AI-powered automation:
-- **Groq API Integration**: 4-model hybrid architecture (Velocity, Mentor, Deep-Scan, Vision)
-- **n8n Automation**: Self-improving feedback loops
-- **AI News Summarization**: Auto-generate 60-word briefs
-- **Smart Daily 5 Quiz**: Based on user's study topics
-- **OCR Pipeline**: Handwritten answer processing
-- **Real-time Collaboration**
-- **Payment Integration** (Razorpay)
+- n8n automation integration
+- Additional AI models (Claude 3.5, GPT-4)
+- OCR Pipeline for handwritten answers
+- Real-time collaboration
+- Push notifications
+- Payment integration (Razorpay)
 
 ## 📄 License
 

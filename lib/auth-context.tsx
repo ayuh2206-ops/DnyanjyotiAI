@@ -10,49 +10,20 @@ import {
   createUserWithEmailAndPassword
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp, updateDoc, increment } from 'firebase/firestore';
-import { auth, db, googleProvider, VERO_EMAIL } from './firebase';
-import { UserRole, PaymentStatus, PlanType, checkFacultyAssignment, activateFacultyAssignment, createFaculty } from './db';
+import { auth, db, googleProvider, isVeroAdmin } from './firebase';
+import { 
+  UserProfile,
+  UserRole, 
+  PaymentStatus, 
+  PlanType, 
+  checkFacultyAssignment, 
+  activateFacultyAssignment, 
+  createFaculty,
+  FacultyAssignment
+} from './db';
 
-// User profile stored in Firestore
-export interface UserProfile {
-  uid: string;
-  email: string;
-  displayName: string;
-  photoURL: string | null;
-  role: UserRole;
-  plan: PlanType;
-  tokens: number;
-  streak: number;
-  longestStreak: number;
-  efficiency: number;
-  targetExam: string;
-  isAdmin: boolean;
-  // Payment
-  paymentStatus: PaymentStatus;
-  paymentExpiry?: Date | null;
-  lifetimeAccess: boolean;
-  // Batch assignment
-  batchId?: string | null;
-  batchName?: string | null;
-  facultyId?: string | null;
-  // Stats
-  testsCompleted: number;
-  totalStudyTime: number;
-  averageScore: number;
-  // Subjects
-  subjects: {
-    polity: number;
-    history: number;
-    geography: number;
-    economy: number;
-    environment: number;
-    science: number;
-    currentAffairs: number;
-    ethics: number;
-  };
-  createdAt: Date;
-  lastLoginAt: Date;
-}
+// Re-export UserProfile for components that import from auth-context
+export type { UserProfile };
 
 interface AuthContextType {
   user: User | null;
@@ -74,11 +45,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Check if user is VERO admin
-const isVeroAdmin = (email: string | null | undefined): boolean => {
-  return email === VERO_EMAIL;
-};
 
 // Default profile for new users
 const createDefaultProfile = (user: User): Omit<UserProfile, 'createdAt' | 'lastLoginAt'> => {
@@ -125,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   // Role helpers
-  const isVero = userProfile?.role === 'vero' || isVeroAdmin(userProfile?.email);
+  const isVero = userProfile?.role === 'vero' || isVeroAdmin(user?.email);
   const isFaculty = userProfile?.role === 'faculty';
   const isStudent = userProfile?.role === 'student' || (!isVero && !isFaculty);
 
@@ -134,11 +100,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const userRef = doc(db, 'users', firebaseUser.uid);
       const userSnap = await getDoc(userRef);
-      const isVero = isVeroAdmin(firebaseUser.email);
+      const isVeroUser = isVeroAdmin(firebaseUser.email);
 
       // Check if this email is pre-assigned as faculty
-      let facultyAssignment = null;
-      if (!isVero && firebaseUser.email) {
+      let facultyAssignment: FacultyAssignment | null = null;
+      if (!isVeroUser && firebaseUser.email) {
         facultyAssignment = await checkFacultyAssignment(firebaseUser.email);
       }
 
@@ -149,20 +115,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         // Determine the role (priority: vero > faculty assignment > existing role)
         let newRole: UserRole = currentRole || 'student';
-        if (isVero) {
+        if (isVeroUser) {
           newRole = 'vero';
         } else if (facultyAssignment && !facultyAssignment.isActivated) {
-          // This user has been assigned as faculty but hasn't activated yet
           newRole = 'faculty';
         }
 
-        const updates: any = {
+        const updates: Record<string, unknown> = {
           lastLoginAt: serverTimestamp(),
-          isAdmin: isVero,
+          isAdmin: isVeroUser,
         };
 
         // Auto-upgrade to vero role if email matches
-        if (isVero) {
+        if (isVeroUser) {
           updates.role = 'vero';
           updates.plan = 'Lifetime';
           updates.lifetimeAccess = true;
@@ -178,7 +143,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           updates.tokens = 999999;
           
           // Activate the faculty assignment
-          await activateFacultyAssignment(facultyAssignment.id!, firebaseUser.uid);
+          if (facultyAssignment.id) {
+            await activateFacultyAssignment(facultyAssignment.id, firebaseUser.uid);
+          }
           
           // Create faculty record
           await createFaculty({
@@ -199,12 +166,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return {
           ...data,
           uid: firebaseUser.uid,
-          isAdmin: isVero || data.isAdmin,
-          role: updates.role || newRole,
-          plan: updates.plan || data.plan,
-          lifetimeAccess: updates.lifetimeAccess ?? data.lifetimeAccess,
-          paymentStatus: updates.paymentStatus || data.paymentStatus,
-          tokens: updates.tokens ?? data.tokens,
+          isAdmin: isVeroUser || data.isAdmin,
+          role: (updates.role as UserRole) || newRole,
+          plan: (updates.plan as PlanType) || data.plan,
+          lifetimeAccess: (updates.lifetimeAccess as boolean) ?? data.lifetimeAccess,
+          paymentStatus: (updates.paymentStatus as PaymentStatus) || data.paymentStatus,
+          tokens: (updates.tokens as number) ?? data.tokens,
           createdAt: data.createdAt?.toDate() || new Date(),
           lastLoginAt: new Date(),
           paymentExpiry: data.paymentExpiry?.toDate() || null,
@@ -217,7 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let lifetimeAccess = false;
         let paymentStatus: PaymentStatus = 'none';
 
-        if (isVero) {
+        if (isVeroUser) {
           role = 'vero';
           plan = 'Lifetime';
           tokens = 999999;
@@ -232,7 +199,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           paymentStatus = 'lifetime';
           
           // Activate the faculty assignment
-          await activateFacultyAssignment(facultyAssignment.id!, firebaseUser.uid);
+          if (facultyAssignment.id) {
+            await activateFacultyAssignment(facultyAssignment.id, firebaseUser.uid);
+          }
           
           // Create faculty record
           await createFaculty({
@@ -260,7 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           longestStreak: 0,
           efficiency: 0,
           targetExam: 'UPSC CSE 2025',
-          isAdmin: isVero,
+          isAdmin: isVeroUser,
           paymentStatus,
           paymentExpiry: null,
           lifetimeAccess,
@@ -322,10 +291,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     try {
       setLoading(true);
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      
+      // Manually create/fetch profile immediately
+      const profile = await fetchOrCreateUserProfile(result.user);
+      
+      if (profile) {
+        setUserProfile(profile);
+      } else {
+        console.error("Failed to create user profile in DB");
+      }
+
     } catch (error) {
       console.error('Google sign in error:', error);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -379,7 +360,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       const userRef = doc(db, 'users', user.uid);
-      const cleanData: Record<string, any> = { ...data };
+      const cleanData: Record<string, unknown> = { ...data };
       
       // Remove fields that shouldn't be directly updated
       delete cleanData.createdAt;

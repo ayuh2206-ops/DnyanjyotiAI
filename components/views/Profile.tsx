@@ -1,15 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { GlassCard, Button, Badge, Input, Toggle, Avatar, Toast } from '../UI';
+import { getUserBadges, AVAILABLE_BADGES, Badge as BadgeType } from '@/lib/db';
 
 export const ProfileView: React.FC = () => {
   const { user, userProfile, signOut } = useAuth();
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [earnedBadges, setEarnedBadges] = useState<BadgeType[]>([]);
   
   // Form state
   const [displayName, setDisplayName] = useState(userProfile?.displayName || '');
@@ -20,6 +22,22 @@ export const ProfileView: React.FC = () => {
   const [pushNotifications, setPushNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(true);
   const [socraticMode, setSocraticMode] = useState(true);
+
+  useEffect(() => {
+    if (user?.uid) {
+      loadBadges();
+    }
+  }, [user?.uid]);
+
+  const loadBadges = async () => {
+    if (!user?.uid) return;
+    try {
+      const badges = await getUserBadges(user.uid);
+      setEarnedBadges(badges);
+    } catch (error) {
+      console.error('Error loading badges:', error);
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (!user?.uid) return;
@@ -166,6 +184,61 @@ export const ProfileView: React.FC = () => {
               <div className="text-center p-4 rounded-lg bg-white/5">
                 <p className="text-2xl font-bold text-white">{userProfile?.averageScore || 0}%</p>
                 <p className="text-xs text-[#c9ad92]">Avg Score</p>
+              </div>
+            </div>
+          </GlassCard>
+
+          {/* Achievements & Badges */}
+          <GlassCard>
+            <h3 className="font-bold mb-4 flex items-center gap-2 text-white">
+              <span className="material-symbols-outlined text-primary">military_tech</span>
+              Achievements & Badges
+            </h3>
+            {earnedBadges.length > 0 ? (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                {earnedBadges.map((badge) => (
+                  <div 
+                    key={badge.id}
+                    className="text-center p-4 rounded-lg bg-gradient-to-br from-primary/10 to-transparent border border-primary/20 hover:border-primary/40 transition-all cursor-pointer group"
+                    title={badge.description}
+                  >
+                    <span className="text-3xl group-hover:scale-110 transition-transform inline-block">{badge.icon}</span>
+                    <p className="text-xs font-medium text-white mt-2">{badge.name}</p>
+                    {badge.earnedAt && (
+                      <p className="text-[10px] text-[#c9ad92] mt-1">
+                        {new Date(badge.earnedAt).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <span className="text-4xl mb-2 block">🎯</span>
+                <p className="text-[#c9ad92] text-sm">Complete tasks to earn badges!</p>
+                <p className="text-xs text-white/40 mt-2">
+                  Start with a 7-day streak to earn your first badge
+                </p>
+              </div>
+            )}
+            
+            {/* Locked Badges Preview */}
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <p className="text-xs text-[#c9ad92] mb-3">Next badges to unlock:</p>
+              <div className="flex flex-wrap gap-2">
+                {AVAILABLE_BADGES
+                  .filter(b => !earnedBadges.some(eb => eb.id === b.id))
+                  .slice(0, 4)
+                  .map((badge) => (
+                    <div 
+                      key={badge.id}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10"
+                      title={badge.description}
+                    >
+                      <span className="text-lg opacity-50">{badge.icon}</span>
+                      <span className="text-xs text-[#c9ad92]">{badge.name}</span>
+                    </div>
+                  ))}
               </div>
             </div>
           </GlassCard>
