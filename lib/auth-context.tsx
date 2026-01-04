@@ -190,7 +190,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             batchIds: [],
             totalStudents: 0,
             isActive: true,
-            createdAt: new Date(),
             createdBy: facultyAssignment.assignedBy,
           });
         }
@@ -245,7 +244,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             batchIds: [],
             totalStudents: 0,
             isActive: true,
-            createdAt: new Date(),
             createdBy: facultyAssignment.assignedBy,
           });
         }

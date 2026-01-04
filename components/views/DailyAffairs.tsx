@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { GlassCard, Button, Badge, LoadingSpinner } from '../UI';
-import { getNewsArticles, getEditorialBriefs, NewsArticle, EditorialBrief } from '@/lib/db';
 
 interface Article {
   id: string;
