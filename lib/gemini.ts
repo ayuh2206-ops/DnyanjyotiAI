@@ -3,23 +3,25 @@
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// Model configurations - ordered by availability (most available first)
+// Model configurations - using models compatible with Google Cloud API keys
+// Google Cloud keys have different model access than AI Studio keys
 const MODELS = {
-  // Most widely available models
-  basic: {
-    name: 'gemini-pro',  // Original model - always available
-    temperature: 0.7,
-    maxTokens: 2048,
-  },
-  flash: {
-    name: 'gemini-1.5-flash',  // Fast model
-    temperature: 0.7,
-    maxTokens: 2048,
-  },
+  // These models work with Google Cloud Console API keys
   pro: {
-    name: 'gemini-1.5-pro',  // Better quality
-    temperature: 0.9,
-    maxTokens: 4096,
+    name: 'gemini-pro',  // Most widely available - works with all keys
+    temperature: 0.7,
+    maxTokens: 2048,
+  },
+  // Fallback options
+  pro_latest: {
+    name: 'gemini-1.0-pro-latest',
+    temperature: 0.7,
+    maxTokens: 2048,
+  },
+  pro_001: {
+    name: 'gemini-1.0-pro-001',
+    temperature: 0.7,
+    maxTokens: 2048,
   },
 };
 
@@ -78,7 +80,7 @@ async function tryModel(
         errorMessage.toLowerCase().includes('resource') ||
         errorMessage.toLowerCase().includes('exhausted');
       
-      console.error(`Model ${modelName} failed:`, errorMessage);
+      console.error(`Model ${modelName} failed (${response.status}):`, errorMessage);
       return { success: false, error: errorMessage, isRateLimit, status: response.status };
     }
 
@@ -111,12 +113,11 @@ export async function generateContent(
 
   const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
   
-  // Try models in order of availability
-  // gemini-pro is the most widely available and stable
+  // Try models in order - gemini-pro is most compatible with Google Cloud keys
   const modelsToTry = [
-    MODELS.basic,   // gemini-pro - always available
-    MODELS.flash,   // gemini-1.5-flash - usually available
-    MODELS.pro,     // gemini-1.5-pro - might have stricter limits
+    MODELS.pro,         // gemini-pro - most compatible
+    MODELS.pro_latest,  // gemini-1.0-pro-latest
+    MODELS.pro_001,     // gemini-1.0-pro-001
   ];
 
   let lastError = '';
@@ -145,10 +146,16 @@ export async function generateContent(
       if (!result.isRateLimit) {
         allRateLimited = false;
       }
+      
+      // If it's a 404 (model not found), try next model immediately
+      if (result.status === 404) {
+        console.log(`Model ${model.name} not found, trying next...`);
+        continue;
+      }
     }
 
     // Small delay between model attempts
-    await delay(500);
+    await delay(300);
   }
 
   // All models failed
@@ -161,6 +168,10 @@ export async function generateContent(
   // Provide helpful error message
   if (lastError.includes('API key not valid')) {
     throw new Error('Invalid API key. Please check GEMINI_API_KEY in Vercel environment variables.');
+  }
+  
+  if (lastError.includes('not found')) {
+    throw new Error('AI models not available. Please use an API key from https://aistudio.google.com/app/apikey');
   }
   
   throw new Error(`AI error: ${lastError}`);

@@ -20,12 +20,13 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Test different models
+  // Test different models - ordered by compatibility
   const modelsToTest = [
-    'gemini-1.5-flash',
-    'gemini-1.5-pro', 
-    'gemini-1.0-pro',
-    'gemini-pro',
+    'gemini-pro',           // Most compatible with Google Cloud keys
+    'gemini-1.0-pro-latest',
+    'gemini-1.0-pro-001',
+    'gemini-1.5-flash',     // Only works with AI Studio keys
+    'gemini-1.5-pro',       // Only works with AI Studio keys
   ];
 
   for (const model of modelsToTest) {
@@ -74,19 +75,25 @@ export async function GET(request: NextRequest) {
   if (workingModels.length > 0) {
     results.overallStatus = 'WORKING';
     results.workingModels = workingModels;
-    results.recommendation = `Use model: ${workingModels[0]}`;
+    results.recommendation = `Your API key works! Using model: ${workingModels[0]}`;
   } else {
     results.overallStatus = 'ALL_FAILED';
-    results.recommendation = 'Create a NEW API key from https://aistudio.google.com/app/apikey';
     
     // Check specific error patterns
-    const errors = Object.values(results.models).map((m: any) => m.error || '').join(' ');
-    if (errors.includes('API key not valid')) {
+    const allErrors = Object.values(results.models).map((m: any) => m.error || '').join(' ');
+    
+    if (allErrors.includes('API key not valid')) {
       results.issue = 'Invalid API key';
-    } else if (errors.includes('quota') || errors.includes('rate')) {
-      results.issue = 'Quota exhausted - wait or create new key';
-    } else if (errors.includes('not found') || errors.includes('does not exist')) {
-      results.issue = 'API not enabled on project';
+      results.recommendation = 'Your API key is invalid. Get a new one from https://aistudio.google.com/app/apikey';
+    } else if (allErrors.includes('not found')) {
+      results.issue = 'Models not available for this API key type';
+      results.recommendation = 'Your Google Cloud API key cannot access Gemini models. Get a key from https://aistudio.google.com/app/apikey instead';
+    } else if (allErrors.includes('quota') || allErrors.includes('rate')) {
+      results.issue = 'Quota exhausted';
+      results.recommendation = 'Wait a few minutes or create a new API key in a new project';
+    } else {
+      results.issue = 'Unknown error';
+      results.recommendation = 'Create a fresh API key from https://aistudio.google.com/app/apikey';
     }
   }
 
